@@ -1,0 +1,31 @@
+spring:
+  application:
+    name: libra-backend
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+libra:
+  kis:
+    real:
+      base-url: https://openapi.koreainvestment.com:9443
+      app-key: ${LIBRA_KIS_REAL_APP_KEY:}
+      app-secret: ${LIBRA_KIS_REAL_APP_SECRET:}
+      account-no: ${LIBRA_KIS_REAL_ACCOUNT_NO:}
+      product-code: ${LIBRA_KIS_REAL_PRODUCT_CODE:01}
+      user-agent: ${LIBRA_KIS_USER_AGENT:Mozilla/5.0}
+    demo:
+      base-url: https://openapivts.koreainvestment.com:29443
+      app-key: ${LIBRA_KIS_DEMO_APP_KEY:}
+      app-secret: ${LIBRA_KIS_DEMO_APP_SECRET:}
+      account-no: ${LIBRA_KIS_DEMO_ACCOUNT_NO:}
+      product-code: ${LIBRA_KIS_DEMO_PRODUCT_CODE:01}
+      user-agent: ${LIBRA_KIS_USER_AGENT:Mozilla/5.0}
