@@ -4,6 +4,7 @@ out/
 *.iml
 .idea/
 .vscode/
+logs/
 src/main/resources/application-local.yml
 .env
 .env.*

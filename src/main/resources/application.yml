@@ -3,6 +3,22 @@ spring:
     name: libra-backend
   jackson:
     property-naming-strategy: SNAKE_CASE
+  datasource:
+    url: jdbc:mysql://${LIBRA_DB_HOST:localhost}:${LIBRA_DB_PORT:3306}/${LIBRA_DB_NAME:libra}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Seoul
+    username: ${LIBRA_DB_USER:libra}
+    password: ${LIBRA_DB_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: Asia/Seoul
 
 server:
   port: 8080
@@ -14,6 +30,14 @@ management:
         include: health,info
 
 libra:
+  agent:
+    base-url: ${LIBRA_AGENT_BASE_URL:http://localhost:8010}
+    connect-timeout-ms: ${LIBRA_AGENT_CONNECT_TIMEOUT_MS:3000}
+    read-timeout-ms: ${LIBRA_AGENT_READ_TIMEOUT_MS:60000}
+    fallback-to-stub: ${LIBRA_AGENT_FALLBACK_TO_STUB:true}
+  knowledge:
+    local-dir: ${LIBRA_KNOWLEDGE_LOCAL_DIR:}
+    max-age-minutes: ${LIBRA_KNOWLEDGE_MAX_AGE_MINUTES:240}
   kis:
     real:
       base-url: https://openapi.koreainvestment.com:9443

@@ -1,0 +1,29 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: libra-local-mysql
+    restart: unless-stopped
+    ports:
+      - "${LIBRA_DB_PORT:-3306}:3306"
+    environment:
+      MYSQL_DATABASE: ${LIBRA_DB_NAME:-libra}
+      MYSQL_USER: ${LIBRA_DB_USER:-libra}
+      MYSQL_PASSWORD: ${LIBRA_DB_PASSWORD:-libra_dev_password}
+      MYSQL_ROOT_PASSWORD: ${LIBRA_DB_ROOT_PASSWORD:-libra_root_password}
+      TZ: Asia/Seoul
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+09:00
+    volumes:
+      - "${LIBRA_MYSQL_DATA_DIR:-D:/libra-data/mysql}:/var/lib/mysql"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h 127.0.0.1 -u$${MYSQL_USER} -p$${MYSQL_PASSWORD} --silent"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s

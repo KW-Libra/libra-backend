@@ -1,6 +1,7 @@
 package com.libra.api.common;
 
 import com.libra.api.integration.kis.KisPortfolioSyncException;
+import com.libra.api.integration.agent.AgentGatewayException;
 import jakarta.validation.ConstraintViolationException;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
@@ -16,6 +17,11 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(KisPortfolioSyncException.class)
     public ResponseEntity<Map<String, Object>> handleKis(KisPortfolioSyncException exception) {
+        return build(HttpStatus.BAD_GATEWAY, exception.getMessage());
+    }
+
+    @ExceptionHandler(AgentGatewayException.class)
+    public ResponseEntity<Map<String, Object>> handleAgentGateway(AgentGatewayException exception) {
         return build(HttpStatus.BAD_GATEWAY, exception.getMessage());
     }
 

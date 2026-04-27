@@ -15,6 +15,10 @@ import org.springframework.util.StringUtils;
 public class StubAgentGateway {
 
     public Map<String, Object> run(JudgeRunDispatchRequest request, PortfolioSnapshot portfolio) {
+        return runWithReason(request, portfolio, "Spring Boot backend placeholder while libra-agent bridge is unavailable.");
+    }
+
+    public Map<String, Object> runWithReason(JudgeRunDispatchRequest request, PortfolioSnapshot portfolio, String bridgeReason) {
         OffsetDateTime now = OffsetDateTime.now();
         String trigger = StringUtils.hasText(request.trigger()) ? request.trigger() : "pull";
         String depth = StringUtils.hasText(request.depth()) ? request.depth() : "medium";
@@ -26,14 +30,14 @@ public class StubAgentGateway {
         traceNode.put("actor", "disclosure_agent");
         traceNode.put("query", request.query());
         traceNode.put("summary", "Stub run completed without calling LangGraph agents.");
-        traceNode.put("context", "Spring Boot backend placeholder while libra-agent bridge is under implementation.");
+        traceNode.put("context", bridgeReason);
         traceNode.put("note", "Portfolio state was accepted and a follow-up checkpoint was scheduled.");
         traceNode.put("references", List.of());
         traceNode.put("tools_called", List.of());
 
         Map<String, Object> decision = new LinkedHashMap<>();
         decision.put("decision", "DEFER");
-        decision.put("summary", "Judge bridge is not wired yet, so the backend recorded the request and deferred the decision.");
+        decision.put("summary", "libra-agent call did not complete, so the backend recorded the request and deferred the decision.");
         decision.put("confidence", 0.0);
         decision.put("urgency", "defer");
         decision.put("called_agents", List.of());
@@ -45,15 +49,15 @@ public class StubAgentGateway {
                 "cost_agent"
         ));
         decision.put("skip_rationale", Map.of(
-                "disclosure_agent", "LangGraph bridge is not connected.",
-                "news_agent", "LangGraph bridge is not connected.",
-                "report_agent", "LangGraph bridge is not connected.",
-                "earnings_agent", "LangGraph bridge is not connected.",
-                "cost_agent", "LangGraph bridge is not connected."
+                "disclosure_agent", bridgeReason,
+                "news_agent", bridgeReason,
+                "report_agent", bridgeReason,
+                "earnings_agent", bridgeReason,
+                "cost_agent", bridgeReason
         ));
         decision.put("candidate_rebalance_plan", Map.of());
         decision.put("decision_trace", List.of(traceNode));
-        decision.put("reasoning", "The backend only validates payloads and preserves contract shape at this stage.");
+        decision.put("reasoning", bridgeReason);
         decision.put("user_notification", null);
         decision.put("follow_up_at", now.plusHours(1).toString());
         decision.put("feedback_checkpoint", null);
@@ -79,6 +83,7 @@ public class StubAgentGateway {
         runtime.put("resume_required", false);
         runtime.put("interrupts", new ArrayList<>());
         runtime.put("human_response", null);
+        runtime.put("agent_gateway_error", bridgeReason);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("model", "libra-backend-stub");
@@ -90,6 +95,31 @@ public class StubAgentGateway {
         result.put("runtime", runtime);
         result.put("state_record", null);
 
+        return result;
+    }
+
+    public Map<String, Object> evaluate(Map<String, Object> payload) {
+        return evaluateWithReason(payload, "Spring Boot backend placeholder while libra-agent evaluation bridge is unavailable.");
+    }
+
+    public Map<String, Object> evaluateWithReason(Map<String, Object> payload, String bridgeReason) {
+        Object horizonValue = payload == null ? null : payload.get("horizon");
+        String horizon = horizonValue == null ? null : String.valueOf(horizonValue);
+        Map<String, Object> metrics = new LinkedHashMap<>();
+        if (payload != null) {
+            metrics.putAll(payload);
+        }
+        metrics.put("bridge_reason", bridgeReason);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("agent_id", "evaluation");
+        result.put("horizon", StringUtils.hasText(horizon) ? horizon : "1w");
+        result.put("verdict", "BLOCKED");
+        result.put("direction_accuracy", null);
+        result.put("magnitude_error", null);
+        result.put("cost_efficiency", null);
+        result.put("note", bridgeReason);
+        result.put("metrics", metrics);
         return result;
     }
 }

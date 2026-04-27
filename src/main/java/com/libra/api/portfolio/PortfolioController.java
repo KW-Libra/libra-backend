@@ -40,7 +40,7 @@ public class PortfolioController {
     public ResponseEntity<Map<String, Object>> syncCurrentPortfolioFromKis(@RequestBody(required = false) @Valid KisSyncRequest request) {
         KisSyncRequest safeRequest = request == null ? new KisSyncRequest("real", null, null, null) : request;
         PortfolioSnapshot snapshot = kisPortfolioSyncService.syncDomesticPortfolio(safeRequest);
-        portfolioStateService.save(snapshot);
+        portfolioStateService.save(snapshot, "KIS_DOMESTIC_BALANCE");
         return ResponseEntity.ok(Map.of(
                 "status", "SYNCED",
                 "source", "KIS_DOMESTIC_BALANCE",
