@@ -14,11 +14,20 @@ spring:
     enabled: true
 
 libra:
+  auth:
+    jwt:
+      secret: test-secret-test-secret-test-secret-32bytes!
+      access-ttl-minutes: 60
+      issuer: libra-backend-test
+    refresh:
+      ttl-days: 14
+    oauth:
+      frontend-success-uri: http://localhost:5173/auth/callback
+      frontend-failure-uri: http://localhost:5173/auth/callback
   agent:
     base-url: http://localhost:8010
     connect-timeout-ms: 100
     read-timeout-ms: 100
-    fallback-to-stub: true
   knowledge:
     local-dir:
     max-age-minutes: 240

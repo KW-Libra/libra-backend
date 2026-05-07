@@ -110,6 +110,17 @@ Health check:
 Invoke-RestMethod http://localhost:8080/actuator/health
 ```
 
+If local MySQL is not available, use the H2 smoke-test backend instead. This keeps the E2E path runnable without touching a developer's existing MySQL service:
+
+```powershell
+cd D:\libra-backend
+.\scripts\start-backend-h2-e2e.ps1 `
+  -AgentBaseUrl http://127.0.0.1:8010 `
+  -KnowledgeLocalDir D:\libra-data\knowledge\sample
+```
+
+The H2 path is for local smoke tests only; production and persistent local runs should use MySQL.
+
 ## 6. Run E2E request
 
 In a separate terminal:
@@ -129,6 +140,21 @@ To connect ingest output into the run:
 
 If backend was started with `-KnowledgeLocalDir`, the request can omit `-KnowledgeDir`; backend will attach that cache automatically while `manifest.json` is fresh.
 
+The E2E script authenticates first. By default it uses:
+
+```text
+local-e2e@libra.test / local-e2e-password
+```
+
+Override when needed:
+
+```powershell
+.\scripts\run-local-e2e.ps1 `
+  -BackendBaseUrl http://127.0.0.1:18080 `
+  -Email you@example.com `
+  -Password "your-local-password"
+```
+
 If you want the Judge request to use the stored portfolio instead of sending a portfolio inline, save or sync the current portfolio first:
 
 ```powershell
@@ -146,16 +172,37 @@ $portfolio = @{
 Invoke-RestMethod `
   -Uri http://127.0.0.1:18080/api/v1/portfolios/current `
   -Method Post `
+  -Headers @{ Authorization = "Bearer <access_token>" } `
   -ContentType "application/json; charset=utf-8" `
   -Body $portfolio
 ```
 
-For KIS, configure `LIBRA_KIS_*` environment variables and call:
+For KIS, either configure `LIBRA_KIS_*` environment variables or save a user credential first. User credentials are encrypted in backend and take precedence over env credentials:
+
+```powershell
+$credential = @{
+  environment = "real"
+  app_key = "<kis-app-key>"
+  app_secret = "<kis-app-secret>"
+  account_no = "12345678-01"
+  product_code = "01"
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Uri http://127.0.0.1:18080/api/v1/kis/credential `
+  -Method Put `
+  -Headers @{ Authorization = "Bearer <access_token>" } `
+  -ContentType "application/json; charset=utf-8" `
+  -Body $credential
+```
+
+Then call:
 
 ```powershell
 Invoke-RestMethod `
   -Uri http://127.0.0.1:18080/api/v1/portfolios/current/sync/kis `
   -Method Post `
+  -Headers @{ Authorization = "Bearer <access_token>" } `
   -ContentType "application/json; charset=utf-8" `
   -Body '{"environment":"real"}'
 ```
@@ -170,7 +217,7 @@ The script prints:
 - recent persisted decision runs
 - stored decision detail
 
-If `runtime.agent_gateway_error` appears, backend could not reach `libra-agent` and used the fallback stub. That still proves MySQL persistence works, but not the full agent path.
+If `libra-agent` is not reachable, the request fails with `502 Bad Gateway`. There is no stub fallback in the E2E path.
 
 ## Useful Commands
 

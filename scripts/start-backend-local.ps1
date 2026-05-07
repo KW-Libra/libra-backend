@@ -7,8 +7,7 @@ param(
     [string]$AgentBaseUrl = "http://localhost:8010",
     [int]$AgentReadTimeoutMs = 180000,
     [string]$KnowledgeLocalDir = "",
-    [int]$KnowledgeMaxAgeMinutes = 240,
-    [bool]$FallbackToStub = $true
+    [int]$KnowledgeMaxAgeMinutes = 240
 )
 
 $ErrorActionPreference = "Stop"
@@ -22,7 +21,6 @@ $env:LIBRA_DB_USER = $DbUser
 $env:LIBRA_DB_PASSWORD = $DbPassword
 $env:LIBRA_AGENT_BASE_URL = $AgentBaseUrl
 $env:LIBRA_AGENT_READ_TIMEOUT_MS = [string]$AgentReadTimeoutMs
-$env:LIBRA_AGENT_FALLBACK_TO_STUB = $FallbackToStub.ToString().ToLowerInvariant()
 $env:LIBRA_KNOWLEDGE_LOCAL_DIR = $KnowledgeLocalDir
 $env:LIBRA_KNOWLEDGE_MAX_AGE_MINUTES = [string]$KnowledgeMaxAgeMinutes
 $env:SERVER_PORT = [string]$ServerPort

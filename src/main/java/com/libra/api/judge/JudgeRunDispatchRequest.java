@@ -1,6 +1,7 @@
 package com.libra.api.judge;
 
 import com.libra.api.portfolio.PortfolioSnapshot;
+import com.libra.api.portfolio.PortfolioDefinition;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -21,6 +22,10 @@ public record JudgeRunDispatchRequest(
         @Min(1)
         Integer deadlineSeconds,
         String threadId,
-        Boolean enableHumanInterrupts
+        Boolean enableHumanInterrupts,
+        Boolean allowIngestRefresh,
+        Map<String, Object> ingestRefresh,
+        @Valid
+        PortfolioDefinition portfolioDefinition
 ) {
 }

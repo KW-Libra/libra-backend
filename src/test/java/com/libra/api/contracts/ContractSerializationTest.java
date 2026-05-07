@@ -21,7 +21,17 @@ class ContractSerializationTest {
     void serializesPortfolioSnapshotInSnakeCase() throws Exception {
         PortfolioSnapshot snapshot = new PortfolioSnapshot(
                 OffsetDateTime.parse("2026-04-15T10:00:00+09:00"),
-                List.of(new PortfolioHolding("005930", "삼성전자", 0.7d, List.of("005930.KS"), 10d, 65000d)),
+                List.of(new PortfolioHolding(
+                        "005930",
+                        "삼성전자",
+                        0.7d,
+                        List.of("005930.KS"),
+                        10d,
+                        65000d,
+                        60000d,
+                        650000d,
+                        50000d
+                )),
                 1000000d,
                 0.3d,
                 List.of("장기 보유")
@@ -34,7 +44,12 @@ class ContractSerializationTest {
         assertThat(json).contains("total_value_krw");
         assertThat(json).contains("cash_weight");
         assertThat(json).contains("user_preferences");
+        assertThat(json).contains("average_price");
+        assertThat(json).contains("market_value_krw");
+        assertThat(json).contains("unrealized_pnl_krw");
         assertThat(json).doesNotContain("generatedAt");
         assertThat(json).doesNotContain("companyName");
+        assertThat(json).doesNotContain("averagePrice");
+        assertThat(json).doesNotContain("marketValueKrw");
     }
 }

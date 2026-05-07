@@ -1,13 +1,16 @@
 package com.libra.api.integration.agent;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.libra.api.judge.JudgeRunDispatchRequest;
+import com.libra.api.portfolio.PortfolioDefinition;
 import com.libra.api.knowledge.KnowledgeProperties;
 import com.libra.api.knowledge.KnowledgeSourceResolver;
 import com.libra.api.portfolio.PortfolioHolding;
 import com.libra.api.portfolio.PortfolioSnapshot;
+import com.libra.api.portfolio.TargetWeight;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -31,13 +34,11 @@ class HttpAgentGatewayTest {
             AgentProperties properties = new AgentProperties(
                     "http://localhost:" + server.getAddress().getPort(),
                     1000,
-                    1000,
-                    false
+                    1000
             );
             HttpAgentGateway gateway = new HttpAgentGateway(
                     RestClient.builder(),
                     properties,
-                    new StubAgentGateway(),
                     knowledgeResolver("", 240)
             );
 
@@ -52,26 +53,21 @@ class HttpAgentGatewayTest {
     }
 
     @Test
-    void fallsBackToStubWhenAgentApiIsUnavailable() {
+    void failsWhenAgentApiIsUnavailable() {
         AgentProperties properties = new AgentProperties(
                 "http://127.0.0.1:1",
                 100,
-                100,
-                true
+                100
         );
         HttpAgentGateway gateway = new HttpAgentGateway(
                 RestClient.builder(),
                 properties,
-                new StubAgentGateway(),
                 knowledgeResolver("", 240)
         );
 
-        Map<String, Object> result = gateway.run(request(), portfolio());
-
-        assertThat(result.get("model")).isEqualTo("libra-backend-stub");
-        assertThat(cast(result.get("runtime")).get("agent_gateway_error"))
-                .asString()
-                .contains("HTTP call to libra-agent failed");
+        assertThatThrownBy(() -> gateway.run(request(), portfolio()))
+                .isInstanceOf(AgentGatewayException.class)
+                .hasMessageContaining("Failed to call libra-agent");
     }
 
     @Test
@@ -82,13 +78,11 @@ class HttpAgentGatewayTest {
             AgentProperties properties = new AgentProperties(
                     "http://localhost:" + server.getAddress().getPort(),
                     1000,
-                    1000,
-                    false
+                    1000
             );
             HttpAgentGateway gateway = new HttpAgentGateway(
                     RestClient.builder(),
                     properties,
-                    new StubAgentGateway(),
                     knowledgeResolver("", 240)
             );
 
@@ -117,15 +111,14 @@ class HttpAgentGatewayTest {
                 "{\"generated_at\":\"" + OffsetDateTime.now() + "\"}",
                 StandardCharsets.UTF_8
         );
-        AgentProperties properties = new AgentProperties("http://localhost:8010", 1000, 1000, false);
+        AgentProperties properties = new AgentProperties("http://localhost:8010", 1000, 1000);
         HttpAgentGateway gateway = new HttpAgentGateway(
                 RestClient.builder(),
                 properties,
-                new StubAgentGateway(),
                 knowledgeResolver(knowledgeDir.toString(), 240)
         );
 
-        Map<String, Object> payload = gateway.buildPayload(request(), portfolio());
+        Map<String, Object> payload = gateway.buildPayload(request(), portfolio(), java.util.List.of());
 
         assertThat(cast(payload.get("knowledge_sources")))
                 .containsEntry("events", knowledgeDir.resolve("events.json").toAbsolutePath().normalize().toString())
@@ -134,6 +127,87 @@ class HttpAgentGatewayTest {
                         knowledgeDir.resolve("normalized_documents.json").toAbsolutePath().normalize().toString()
                 );
         assertThat(payload).doesNotContainKey("knowledge_base");
+    }
+
+    @Test
+    void forwardsIngestRefreshOptionsToAgentApi() {
+        AgentProperties properties = new AgentProperties("http://localhost:8010", 1000, 1000);
+        HttpAgentGateway gateway = new HttpAgentGateway(
+                RestClient.builder(),
+                properties,
+                knowledgeResolver("", 240)
+        );
+        JudgeRunDispatchRequest request = new JudgeRunDispatchRequest(
+                "포트폴리오 점검",
+                null,
+                null,
+                "medium",
+                "pull",
+                null,
+                null,
+                "thread-123",
+                false,
+                true,
+                Map.of(
+                        "mode", "live",
+                        "root", "D:/libra-ingest",
+                        "rss_limit", 1,
+                        "dart_limit", 0,
+                        "report_limit", 0
+                ),
+                null
+        );
+
+        Map<String, Object> payload = gateway.buildPayload(request, portfolio(), java.util.List.of());
+
+        assertThat(payload).containsEntry("allow_ingest_refresh", true);
+        assertThat(cast(payload.get("ingest_refresh")))
+                .containsEntry("mode", "live")
+                .containsEntry("root", "D:/libra-ingest")
+                .containsEntry("rss_limit", 1)
+                .containsEntry("dart_limit", 0)
+                .containsEntry("report_limit", 0);
+    }
+
+    @Test
+    void forwardsPortfolioDefinitionToAgentApi() {
+        AgentProperties properties = new AgentProperties("http://localhost:8010", 1000, 1000);
+        HttpAgentGateway gateway = new HttpAgentGateway(
+                RestClient.builder(),
+                properties,
+                knowledgeResolver("", 240)
+        );
+        JudgeRunDispatchRequest request = new JudgeRunDispatchRequest(
+                "포트폴리오 점검",
+                null,
+                null,
+                "medium",
+                "pull",
+                null,
+                null,
+                "thread-123",
+                false,
+                null,
+                null,
+                new PortfolioDefinition(
+                        "반도체 집중",
+                        "사용자 정의 인덱스",
+                        List.of(new TargetWeight("005930", "삼성전자", 1.0d, "KR")),
+                        "위험중립형",
+                        0.05d,
+                        "임계치 도달 시",
+                        false,
+                        OffsetDateTime.parse("2026-05-07T00:00:00+09:00")
+                )
+        );
+
+        Map<String, Object> payload = gateway.buildPayload(request, portfolio(), java.util.List.of());
+
+        assertThat(payload.get("portfolio_definition"))
+                .isInstanceOfSatisfying(
+                        PortfolioDefinition.class,
+                        definition -> assertThat(definition.name()).isEqualTo("반도체 집중")
+                );
     }
 
     private HttpServer startAgentStub(AtomicReference<String> requestBody) throws IOException {
@@ -209,7 +283,10 @@ class HttpAgentGatewayTest {
                 null,
                 null,
                 "thread-123",
-                false
+                false,
+                null,
+                null,
+                null
         );
     }
 

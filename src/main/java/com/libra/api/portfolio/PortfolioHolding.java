@@ -15,6 +15,19 @@ public record PortfolioHolding(
         double weight,
         List<String> aliases,
         Double shares,
-        Double lastPrice
+        Double lastPrice,
+        Double averagePrice,
+        Double marketValueKrw,
+        Double unrealizedPnlKrw
 ) {
+    public PortfolioHolding(
+            String ticker,
+            String companyName,
+            double weight,
+            List<String> aliases,
+            Double shares,
+            Double lastPrice
+    ) {
+        this(ticker, companyName, weight, aliases, shares, lastPrice, null, null, null);
+    }
 }

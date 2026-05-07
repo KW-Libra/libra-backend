@@ -64,10 +64,34 @@
         }
       ]
     },
+    "timing_accuracy": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "fast_track_accuracy": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "note": {
       "type": "string"
     },
     "metrics": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "reflection": {
       "type": "object",
       "additionalProperties": true
     }

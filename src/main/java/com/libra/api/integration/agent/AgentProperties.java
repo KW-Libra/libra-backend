@@ -13,7 +13,6 @@ public record AgentProperties(
         @Min(1)
         int connectTimeoutMs,
         @Min(1)
-        int readTimeoutMs,
-        boolean fallbackToStub
+        int readTimeoutMs
 ) {
 }

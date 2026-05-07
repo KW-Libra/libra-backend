@@ -23,14 +23,24 @@ public class KisPortfolioSyncService {
 
     private final KisProperties properties;
     private final KisPortfolioMapper mapper;
+    private final KisAccessTokenService accessTokenService;
 
-    public KisPortfolioSyncService(KisProperties properties, KisPortfolioMapper mapper) {
+    public KisPortfolioSyncService(
+            KisProperties properties,
+            KisPortfolioMapper mapper,
+            KisAccessTokenService accessTokenService
+    ) {
         this.properties = properties;
         this.mapper = mapper;
+        this.accessTokenService = accessTokenService;
     }
 
     public PortfolioSnapshot syncDomesticPortfolio(KisSyncRequest request) {
         KisProperties.Credential credential = selectCredential(request.environment());
+        return syncDomesticPortfolio(request, credential);
+    }
+
+    public PortfolioSnapshot syncDomesticPortfolio(KisSyncRequest request, KisProperties.Credential credential) {
         validateCredential(credential, request.environment());
 
         String accountDigits = digitsOnly(resolveAccountNo(request.accountNo(), credential.getAccountNo()));
@@ -41,7 +51,7 @@ public class KisPortfolioSyncService {
         String cano = accountDigits.substring(0, 8);
         String productCode = resolveProductCode(request.productCode(), accountDigits, credential.getProductCode());
         RestClient restClient = buildRestClient(credential);
-        String accessToken = issueAccessToken(restClient, credential);
+        String accessToken = accessTokenService.issueAccessToken(credential);
 
         List<KisBalanceHoldingRow> holdings = new ArrayList<>();
         List<KisBalanceSummaryRow> summary = List.of();
