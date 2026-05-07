@@ -7,6 +7,7 @@ public class KisProperties {
 
     private Credential real = new Credential();
     private Credential demo = new Credential();
+    private String credentialSecret = "change-me-libra-kis-credential-secret-32-bytes";
 
     public Credential getReal() {
         return real;
@@ -22,6 +23,14 @@ public class KisProperties {
 
     public void setDemo(Credential demo) {
         this.demo = demo;
+    }
+
+    public String getCredentialSecret() {
+        return credentialSecret;
+    }
+
+    public void setCredentialSecret(String credentialSecret) {
+        this.credentialSecret = credentialSecret;
     }
 
     public static class Credential {

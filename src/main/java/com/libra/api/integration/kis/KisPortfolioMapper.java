@@ -27,7 +27,7 @@ public class KisPortfolioMapper {
         double stockValue = parseAmount(summary == null ? null : summary.evluAmtSmtlAmt());
         if (stockValue <= 0d) {
             stockValue = safeHoldingRows.stream()
-                    .mapToDouble(row -> parseAmount(row.evluAmt()))
+                    .mapToDouble(this::resolveMarketValue)
                     .sum();
         }
         double totalValue = parseAmount(summary == null ? null : summary.totEvluAmt());
@@ -64,9 +64,11 @@ public class KisPortfolioMapper {
             return null;
         }
 
-        double evaluatedAmount = parseAmount(row.evluAmt());
-        double weight = totalValue > 0d ? round(clamp(evaluatedAmount / totalValue), 6) : 0d;
         double lastPrice = parseAmount(row.prpr());
+        double marketValue = resolveMarketValue(row);
+        double averagePrice = parseAmount(row.pchsAvgPric());
+        Double unrealizedPnl = parseOptionalAmount(row.evluPflsAmt());
+        double weight = totalValue > 0d ? round(clamp(marketValue / totalValue), 6) : 0d;
 
         return new PortfolioHolding(
                 row.pdno().trim(),
@@ -74,8 +76,24 @@ public class KisPortfolioMapper {
                 weight,
                 buildAliases(row.pdno().trim(), row.prdtName().trim()),
                 shares,
-                lastPrice > 0d ? lastPrice : null
+                lastPrice > 0d ? lastPrice : null,
+                averagePrice > 0d ? averagePrice : null,
+                marketValue > 0d ? round(marketValue, 2) : null,
+                unrealizedPnl == null ? null : round(unrealizedPnl, 2)
         );
+    }
+
+    private double resolveMarketValue(KisBalanceHoldingRow row) {
+        if (row == null) {
+            return 0d;
+        }
+        double marketValue = parseAmount(row.evluAmt());
+        if (marketValue > 0d) {
+            return marketValue;
+        }
+        double shares = parseAmount(row.hldgQty());
+        double lastPrice = parseAmount(row.prpr());
+        return shares > 0d && lastPrice > 0d ? shares * lastPrice : 0d;
     }
 
     private List<String> buildAliases(String ticker, String companyName) {
@@ -99,6 +117,17 @@ public class KisPortfolioMapper {
             return Double.parseDouble(raw.replace(",", "").trim());
         } catch (NumberFormatException exception) {
             return 0d;
+        }
+    }
+
+    private Double parseOptionalAmount(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return null;
+        }
+        try {
+            return Double.parseDouble(raw.replace(",", "").trim());
+        } catch (NumberFormatException exception) {
+            return null;
         }
     }
 

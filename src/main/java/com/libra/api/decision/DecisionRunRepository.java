@@ -6,7 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface DecisionRunRepository extends JpaRepository<DecisionRunEntity, String> {
 
-    List<DecisionRunEntity> findTop20ByOrderByCreatedAtDesc();
+    List<DecisionRunEntity> findTop20ByUserIdOrderByCreatedAtDesc(String userId);
 
-    Optional<DecisionRunEntity> findFirstByThreadIdOrderByCreatedAtDesc(String threadId);
+    Optional<DecisionRunEntity> findFirstByUserIdAndThreadIdOrderByCreatedAtDesc(String userId, String threadId);
 }

@@ -10,6 +10,19 @@ public record KisBalanceHoldingRow(
         String hldgQty,
         @JsonProperty("evlu_amt")
         String evluAmt,
-        String prpr
+        String prpr,
+        @JsonProperty("pchs_avg_pric")
+        String pchsAvgPric,
+        @JsonProperty("evlu_pfls_amt")
+        String evluPflsAmt
 ) {
+    public KisBalanceHoldingRow(
+            String pdno,
+            String prdtName,
+            String hldgQty,
+            String evluAmt,
+            String prpr
+    ) {
+        this(pdno, prdtName, hldgQty, evluAmt, prpr, null, null);
+    }
 }

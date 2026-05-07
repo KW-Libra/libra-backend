@@ -30,15 +30,27 @@ management:
         include: health,info
 
 libra:
+  cors:
+    allowed-origins: ${LIBRA_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
+  auth:
+    jwt:
+      secret: ${LIBRA_JWT_SECRET:change-me-change-me-change-me-32+chars}
+      access-ttl-minutes: ${LIBRA_JWT_ACCESS_TTL_MINUTES:60}
+      issuer: ${LIBRA_JWT_ISSUER:libra-backend}
+    refresh:
+      ttl-days: ${LIBRA_JWT_REFRESH_TTL_DAYS:14}
+    oauth:
+      frontend-success-uri: ${LIBRA_OAUTH_FRONTEND_SUCCESS_URI:http://localhost:5173/auth/callback}
+      frontend-failure-uri: ${LIBRA_OAUTH_FRONTEND_FAILURE_URI:http://localhost:5173/auth/callback}
   agent:
     base-url: ${LIBRA_AGENT_BASE_URL:http://localhost:8010}
     connect-timeout-ms: ${LIBRA_AGENT_CONNECT_TIMEOUT_MS:3000}
     read-timeout-ms: ${LIBRA_AGENT_READ_TIMEOUT_MS:60000}
-    fallback-to-stub: ${LIBRA_AGENT_FALLBACK_TO_STUB:true}
   knowledge:
     local-dir: ${LIBRA_KNOWLEDGE_LOCAL_DIR:}
     max-age-minutes: ${LIBRA_KNOWLEDGE_MAX_AGE_MINUTES:240}
   kis:
+    credential-secret: ${LIBRA_KIS_CREDENTIAL_SECRET:change-me-libra-kis-credential-secret-32-bytes}
     real:
       base-url: https://openapi.koreainvestment.com:9443
       app-key: ${LIBRA_KIS_REAL_APP_KEY:}

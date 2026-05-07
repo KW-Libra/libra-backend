@@ -24,6 +24,9 @@ public class AgentSignalEntity {
     @Column(name = "agent_id", nullable = false, length = 64)
     private String agentId;
 
+    @Column(name = "agent_kind", length = 20)
+    private String agentKind;
+
     @Column(name = "opinion_id", nullable = false, length = 128)
     private String opinionId;
 
@@ -57,6 +60,15 @@ public class AgentSignalEntity {
     @Column(name = "horizon", length = 64)
     private String horizon;
 
+    @Column(name = "vote", length = 10)
+    private String vote;
+
+    @Column(name = "domain_signals_json", columnDefinition = "json")
+    private String domainSignalsJson;
+
+    @Column(name = "llm_used", length = 80)
+    private String llmUsed;
+
     @Lob
     @Column(name = "focus_tickers", nullable = false)
     private String focusTickers;
@@ -86,6 +98,7 @@ public class AgentSignalEntity {
     public AgentSignalEntity(
             String decisionRunId,
             String agentId,
+            String agentKind,
             String opinionId,
             int turnNumber,
             String verdict,
@@ -97,6 +110,9 @@ public class AgentSignalEntity {
             BigDecimal sourceTrust,
             String eventType,
             String horizon,
+            String vote,
+            String domainSignalsJson,
+            String llmUsed,
             String focusTickers,
             String evidence,
             String toolsCalled,
@@ -106,6 +122,7 @@ public class AgentSignalEntity {
     ) {
         this.decisionRunId = decisionRunId;
         this.agentId = agentId;
+        this.agentKind = agentKind;
         this.opinionId = opinionId;
         this.turnNumber = turnNumber;
         this.verdict = verdict;
@@ -117,6 +134,9 @@ public class AgentSignalEntity {
         this.sourceTrust = sourceTrust;
         this.eventType = eventType;
         this.horizon = horizon;
+        this.vote = vote;
+        this.domainSignalsJson = domainSignalsJson;
+        this.llmUsed = llmUsed;
         this.focusTickers = focusTickers;
         this.evidence = evidence;
         this.toolsCalled = toolsCalled;
@@ -129,7 +149,67 @@ public class AgentSignalEntity {
         return agentId;
     }
 
+    public String getAgentKind() {
+        return agentKind;
+    }
+
+    public String getOpinionId() {
+        return opinionId;
+    }
+
+    public int getTurnNumber() {
+        return turnNumber;
+    }
+
+    public String getVerdict() {
+        return verdict;
+    }
+
+    public BigDecimal getDirection() {
+        return direction;
+    }
+
+    public BigDecimal getStrength() {
+        return strength;
+    }
+
+    public String getUrgency() {
+        return urgency;
+    }
+
+    public BigDecimal getConfidence() {
+        return confidence;
+    }
+
     public BigDecimal getSignalScore() {
         return signalScore;
+    }
+
+    public BigDecimal getSourceTrust() {
+        return sourceTrust;
+    }
+
+    public String getEventType() {
+        return eventType;
+    }
+
+    public String getHorizon() {
+        return horizon;
+    }
+
+    public String getVote() {
+        return vote;
+    }
+
+    public String getDomainSignalsJson() {
+        return domainSignalsJson;
+    }
+
+    public String getLlmUsed() {
+        return llmUsed;
+    }
+
+    public String getReasoning() {
+        return reasoning;
     }
 }

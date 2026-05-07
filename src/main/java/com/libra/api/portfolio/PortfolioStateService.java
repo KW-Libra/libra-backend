@@ -23,18 +23,20 @@ public class PortfolioStateService {
     }
 
     @Transactional
-    public PortfolioSnapshot save(PortfolioSnapshot snapshot) {
-        return save(snapshot, "MANUAL");
+    public PortfolioSnapshot save(String userId, PortfolioSnapshot snapshot) {
+        return save(userId, snapshot, "MANUAL");
     }
 
     @Transactional
-    public PortfolioSnapshot save(PortfolioSnapshot snapshot, String source) {
+    public PortfolioSnapshot save(String userId, PortfolioSnapshot snapshot, String source) {
+        requireUser(userId);
         String resolvedSource = StringUtils.hasText(source) ? source : "UNKNOWN";
         LocalDateTime now = LocalDateTime.now(SEOUL);
         LocalDateTime generatedAt = snapshot.generatedAt()
                 .atZoneSameInstant(SEOUL)
                 .toLocalDateTime();
         repository.save(new PortfolioSnapshotEntity(
+                userId,
                 resolvedSource,
                 generatedAt,
                 writeJson(snapshot),
@@ -44,9 +46,16 @@ public class PortfolioStateService {
     }
 
     @Transactional(readOnly = true)
-    public Optional<PortfolioSnapshot> getCurrent() {
-        return repository.findTopByOrderByCreatedAtDesc()
+    public Optional<PortfolioSnapshot> getCurrent(String userId) {
+        requireUser(userId);
+        return repository.findFirstByUserIdOrderByCreatedAtDesc(userId)
                 .map(entity -> readSnapshot(entity.getSnapshotPayload()));
+    }
+
+    private static void requireUser(String userId) {
+        if (!StringUtils.hasText(userId)) {
+            throw new IllegalArgumentException("userId is required for portfolio access");
+        }
     }
 
     private String writeJson(PortfolioSnapshot snapshot) {

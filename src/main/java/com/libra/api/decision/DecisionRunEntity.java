@@ -16,6 +16,9 @@ public class DecisionRunEntity {
     @Column(name = "id", nullable = false, length = 36)
     private String id;
 
+    @Column(name = "user_id", length = 36)
+    private String userId;
+
     @Column(name = "thread_id", nullable = false, length = 128)
     private String threadId;
 
@@ -80,6 +83,7 @@ public class DecisionRunEntity {
 
     public DecisionRunEntity(
             String id,
+            String userId,
             String threadId,
             String query,
             String model,
@@ -100,6 +104,7 @@ public class DecisionRunEntity {
             LocalDateTime updatedAt
     ) {
         this.id = id;
+        this.userId = userId;
         this.threadId = threadId;
         this.query = query;
         this.model = model;
@@ -122,6 +127,10 @@ public class DecisionRunEntity {
 
     public String getId() {
         return id;
+    }
+
+    public String getUserId() {
+        return userId;
     }
 
     public String getThreadId() {

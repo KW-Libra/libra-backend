@@ -1,10 +1,12 @@
 package com.libra.api.integration.agent;
 
+import com.libra.api.decision.PriorReflection;
 import com.libra.api.judge.JudgeRunDispatchRequest;
 import com.libra.api.knowledge.KnowledgeSourceResolver;
 import com.libra.api.portfolio.PortfolioSnapshot;
 import java.time.Duration;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -22,18 +24,15 @@ public class HttpAgentGateway implements AgentGateway {
             };
 
     private final AgentProperties properties;
-    private final StubAgentGateway stubAgentGateway;
     private final KnowledgeSourceResolver knowledgeSourceResolver;
     private final RestClient restClient;
 
     public HttpAgentGateway(
             RestClient.Builder restClientBuilder,
             AgentProperties properties,
-            StubAgentGateway stubAgentGateway,
             KnowledgeSourceResolver knowledgeSourceResolver
     ) {
         this.properties = properties;
-        this.stubAgentGateway = stubAgentGateway;
         this.knowledgeSourceResolver = knowledgeSourceResolver;
         this.restClient = restClientBuilder
                 .baseUrl(properties.baseUrl())
@@ -42,8 +41,12 @@ public class HttpAgentGateway implements AgentGateway {
     }
 
     @Override
-    public Map<String, Object> run(JudgeRunDispatchRequest request, PortfolioSnapshot portfolio) {
-        Map<String, Object> payload = buildPayload(request, portfolio);
+    public Map<String, Object> run(
+            JudgeRunDispatchRequest request,
+            PortfolioSnapshot portfolio,
+            List<PriorReflection> priorReflections
+    ) {
+        Map<String, Object> payload = buildPayload(request, portfolio, priorReflections);
         try {
             Map<String, Object> result = restClient.post()
                     .uri("/v1/judge-runs")
@@ -56,14 +59,7 @@ public class HttpAgentGateway implements AgentGateway {
             result.putIfAbsent("state_record", null);
             return result;
         } catch (RestClientException | AgentGatewayException exception) {
-            if (!properties.fallbackToStub()) {
-                throw new AgentGatewayException("Failed to call libra-agent at " + properties.baseUrl(), exception);
-            }
-            return stubAgentGateway.runWithReason(
-                    request,
-                    portfolio,
-                    "HTTP call to libra-agent failed: " + exception.getMessage()
-            );
+            throw new AgentGatewayException("Failed to call libra-agent at " + properties.baseUrl(), exception);
         }
     }
 
@@ -80,20 +76,24 @@ public class HttpAgentGateway implements AgentGateway {
             }
             return result;
         } catch (RestClientException | AgentGatewayException exception) {
-            if (!properties.fallbackToStub()) {
-                throw new AgentGatewayException("Failed to call libra-agent evaluation endpoint at " + properties.baseUrl(), exception);
-            }
-            return stubAgentGateway.evaluateWithReason(
-                    payload,
-                    "HTTP call to libra-agent evaluation endpoint failed: " + exception.getMessage()
-            );
+            throw new AgentGatewayException("Failed to call libra-agent evaluation endpoint at " + properties.baseUrl(), exception);
         }
     }
 
-    Map<String, Object> buildPayload(JudgeRunDispatchRequest request, PortfolioSnapshot portfolio) {
+    Map<String, Object> buildPayload(
+            JudgeRunDispatchRequest request,
+            PortfolioSnapshot portfolio,
+            List<PriorReflection> priorReflections
+    ) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("query", request.query());
         payload.put("portfolio", portfolio);
+        if (request.portfolioDefinition() != null) {
+            payload.put("portfolio_definition", request.portfolioDefinition());
+        }
+        if (priorReflections != null && !priorReflections.isEmpty()) {
+            payload.put("prior_reflections", priorReflections);
+        }
         Map<String, String> knowledgeSources = knowledgeSourceResolver.resolve(request);
         if (!CollectionUtils.isEmpty(knowledgeSources)) {
             payload.put("knowledge_sources", knowledgeSources);
@@ -121,6 +121,12 @@ public class HttpAgentGateway implements AgentGateway {
         }
         if (request.enableHumanInterrupts() != null) {
             payload.put("enable_human_interrupts", request.enableHumanInterrupts());
+        }
+        if (request.allowIngestRefresh() != null) {
+            payload.put("allow_ingest_refresh", request.allowIngestRefresh());
+        }
+        if (!CollectionUtils.isEmpty(request.ingestRefresh())) {
+            payload.put("ingest_refresh", request.ingestRefresh());
         }
         return payload;
     }

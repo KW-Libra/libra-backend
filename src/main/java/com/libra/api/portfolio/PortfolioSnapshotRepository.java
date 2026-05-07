@@ -5,5 +5,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface PortfolioSnapshotRepository extends JpaRepository<PortfolioSnapshotEntity, Long> {
 
-    Optional<PortfolioSnapshotEntity> findTopByOrderByCreatedAtDesc();
+    Optional<PortfolioSnapshotEntity> findFirstByUserIdOrderByCreatedAtDesc(String userId);
 }

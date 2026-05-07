@@ -75,4 +75,48 @@ public class DecisionExecutionEntity {
         this.rawPayload = rawPayload;
         this.createdAt = createdAt;
     }
+
+    public Long getId() {
+        return id;
+    }
+
+    public String getDecisionRunId() {
+        return decisionRunId;
+    }
+
+    public String getTicker() {
+        return ticker;
+    }
+
+    public String getSide() {
+        return side;
+    }
+
+    public BigDecimal getQuantity() {
+        return quantity;
+    }
+
+    public BigDecimal getPriceKrw() {
+        return priceKrw;
+    }
+
+    public BigDecimal getAmountKrw() {
+        return amountKrw;
+    }
+
+    public LocalDateTime getExecutedAt() {
+        return executedAt;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public String getRawPayload() {
+        return rawPayload;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
 }

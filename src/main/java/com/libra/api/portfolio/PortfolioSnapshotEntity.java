@@ -17,6 +17,9 @@ public class PortfolioSnapshotEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "user_id", length = 36)
+    private String userId;
+
     @Column(name = "source", nullable = false, length = 64)
     private String source;
 
@@ -34,11 +37,13 @@ public class PortfolioSnapshotEntity {
     }
 
     public PortfolioSnapshotEntity(
+            String userId,
             String source,
             LocalDateTime generatedAt,
             String snapshotPayload,
             LocalDateTime createdAt
     ) {
+        this.userId = userId;
         this.source = source;
         this.generatedAt = generatedAt;
         this.snapshotPayload = snapshotPayload;
@@ -47,6 +52,10 @@ public class PortfolioSnapshotEntity {
 
     public Long getId() {
         return id;
+    }
+
+    public String getUserId() {
+        return userId;
     }
 
     public String getSource() {
