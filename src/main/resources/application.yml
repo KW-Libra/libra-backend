@@ -45,7 +45,7 @@ libra:
   agent:
     base-url: ${LIBRA_AGENT_BASE_URL:http://localhost:8010}
     connect-timeout-ms: ${LIBRA_AGENT_CONNECT_TIMEOUT_MS:3000}
-    read-timeout-ms: ${LIBRA_AGENT_READ_TIMEOUT_MS:60000}
+    read-timeout-ms: ${LIBRA_AGENT_READ_TIMEOUT_MS:240000}
   knowledge:
     local-dir: ${LIBRA_KNOWLEDGE_LOCAL_DIR:}
     max-age-minutes: ${LIBRA_KNOWLEDGE_MAX_AGE_MINUTES:240}
