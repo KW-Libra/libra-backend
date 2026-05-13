@@ -2,6 +2,7 @@ package com.libra.api.config;
 
 import com.libra.api.auth.security.JwtAuthFilter;
 import com.libra.api.common.correlation.CorrelationIdFilter;
+import jakarta.servlet.DispatcherType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -36,6 +37,7 @@ public class SecurityConfig {
             .cors(cors -> {})                              // CorsConfig.corsConfigurationSource bean 자동 사용
             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
+                .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/auth/signup", "/api/auth/login").permitAll()
                 .requestMatchers(HttpMethod.GET, "/health", "/actuator/**").permitAll()
                 .requestMatchers(HttpMethod.GET,
