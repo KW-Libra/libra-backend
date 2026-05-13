@@ -18,12 +18,15 @@ public record RunStartRequest(
     @Size(max = 120)
     String thread_id,
 
-    boolean approval_required
+    Boolean approval_required
 
 ) {
     public RunStartRequest {
         if (trigger == null || trigger.isBlank()) {
             trigger = "user_request";
+        }
+        if (approval_required == null) {
+            approval_required = false;
         }
     }
 }

@@ -18,4 +18,13 @@ class RunStartRequestSerializationTests {
         assertThat(json).contains("\"trigger\"");
         assertThat(json).contains("\"approval_required\"");
     }
+
+    @Test
+    void defaultsApprovalRequiredToFalseWhenMissing() throws Exception {
+        RunStartRequest req = objectMapper.readValue(
+            "{\"query\":\"smoke\"}",
+            RunStartRequest.class);
+
+        assertThat(req.approval_required()).isFalse();
+    }
 }
