@@ -68,9 +68,10 @@ jobs:
               "aws s3 cp s3://${DEPLOY_BUCKET}/deploy-artifacts/backend/${GITHUB_SHA}/libra-backend.jar /tmp/libra-backend.jar",
               "install -o libra -g libra -m 0640 /tmp/libra-backend.jar /opt/libra/backend/libra-backend.jar",
               "systemctl restart libra-backend",
-              "sleep 8",
-              "systemctl is-active --quiet libra-backend",
-              "curl -fsS http://127.0.0.1:8080/health"
+              "for i in \$(seq 1 30); do if curl -fsS http://127.0.0.1:8080/health; then exit 0; fi; systemctl is-active --quiet libra-backend || break; sleep 3; done",
+              "systemctl status libra-backend --no-pager || true",
+              "journalctl -u libra-backend -n 120 --no-pager",
+              "exit 1"
             ]
           }
           EOF
