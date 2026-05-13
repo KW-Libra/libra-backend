@@ -48,6 +48,8 @@ Swagger UI:
 | POST | `/api/auth/signup` | public | `{email, password, displayName?}` |
 | POST | `/api/auth/login` | public | `{email, password}` → JWT |
 | GET | `/api/auth/me` | bearer | 현재 사용자 |
+| POST | `/api/runs` | bearer | agent 실행 시작 + SSE relay |
+| POST | `/api/runs/{threadId}/resume` | bearer | agent 실행 재개 + SSE relay |
 | GET | `/api/docs` | public | Swagger UI |
 | GET | `/api/openapi` | public | OpenAPI JSON |
 
@@ -62,6 +64,7 @@ Swagger UI:
 |---|---|
 | CORS | `config/CorsConfig` (allowed-origins 는 `libra.cors.allowed-origins` 설정) |
 | JWT 필터 | `auth/security/JwtAuthFilter` — `Authorization: Bearer` *또는* `?token=` (SSE 호환) |
+| Agent relay | `agent/AgentSseClient` — backend JWT 인증 후 agent SSE 를 Vue 로 중계 |
 | correlation_id | `common/correlation/CorrelationIdFilter` — `X-Trace-Id` 헤더 + MDC `traceId` |
 | 에러 응답 | `common/error/GlobalExceptionHandler` — RFC 7807 ProblemDetail |
 | 로깅 | `logback-spring.xml` — local 은 텍스트, 그 외 JSON (logstash encoder) |
