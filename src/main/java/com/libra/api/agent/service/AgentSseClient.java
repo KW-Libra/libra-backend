@@ -39,6 +39,7 @@ public class AgentSseClient {
         this.objectMapper = objectMapper;
         this.http = HttpClient.newBuilder()
             .connectTimeout(props.connectTimeout())
+            .version(HttpClient.Version.HTTP_1_1)
             .build();
         this.relayExecutor = Executors.newVirtualThreadPerTaskExecutor();
     }
@@ -68,6 +69,7 @@ public class AgentSseClient {
         HttpRequest req;
         try {
             req = HttpRequest.newBuilder(props.endpoint(path))
+                .version(HttpClient.Version.HTTP_1_1)
                 .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                 .header(HttpHeaders.ACCEPT, MediaType.TEXT_EVENT_STREAM_VALUE)
                 .header("X-Trace-Id", traceId)
