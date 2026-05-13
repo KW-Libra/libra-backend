@@ -39,10 +39,12 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/auth/signup", "/api/auth/login").permitAll()
                 .requestMatchers(HttpMethod.GET, "/health", "/actuator/**").permitAll()
                 .requestMatchers(HttpMethod.GET,
-                    "/swagger-ui.html",
+                    "/api/docs",
+                    "/api/docs/**",
+                    "/api/openapi",
+                    "/api/openapi/**",
                     "/swagger-ui/**",
-                    "/v3/api-docs",
-                    "/v3/api-docs/**"
+                    "/webjars/**"
                 ).permitAll()
                 .anyRequest().authenticated()
             )

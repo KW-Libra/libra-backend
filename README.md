@@ -35,8 +35,8 @@ http://localhost:8080
 
 Swagger UI:
 
-- local: http://localhost:8080/swagger-ui.html
-- prod: https://3-34-80-58.nip.io/swagger-ui.html
+- local: http://localhost:8080/api/docs
+- prod: https://3-34-80-58.nip.io/api/docs
 
 로그인 API로 받은 `accessToken`을 Swagger UI의 `Authorize` 버튼에 Bearer token으로 넣으면 보호된 API를 바로 호출할 수 있다.
 
@@ -48,8 +48,8 @@ Swagger UI:
 | POST | `/api/auth/signup` | public | `{email, password, displayName?}` |
 | POST | `/api/auth/login` | public | `{email, password}` → JWT |
 | GET | `/api/auth/me` | bearer | 현재 사용자 |
-| GET | `/swagger-ui.html` | public | Swagger UI |
-| GET | `/v3/api-docs` | public | OpenAPI JSON |
+| GET | `/api/docs` | public | Swagger UI |
+| GET | `/api/openapi` | public | OpenAPI JSON |
 
 ## Demo 계정 (auto-seeded)
 - `demo@libra.local` / `demo1234`

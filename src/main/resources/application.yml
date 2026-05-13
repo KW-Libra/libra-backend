@@ -46,9 +46,11 @@ management:
 
 springdoc:
   api-docs:
-    path: /v3/api-docs
+    path: /api/openapi
   swagger-ui:
-    path: /swagger-ui.html
+    path: /api/docs
+    url: /api/openapi
+    config-url: /api/openapi/swagger-config
     operations-sorter: method
     tags-sorter: alpha
     try-it-out-enabled: true
