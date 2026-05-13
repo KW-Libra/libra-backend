@@ -12,9 +12,10 @@ class RunStartRequestSerializationTests {
     @Test
     void serializesRecordForAgentPayload() throws Exception {
         String json = objectMapper.writeValueAsString(
-            new RunStartRequest("smoke", null, "user_request", null));
+            new RunStartRequest("smoke", null, "user_request", null, true));
 
         assertThat(json).contains("\"query\"");
         assertThat(json).contains("\"trigger\"");
+        assertThat(json).contains("\"approval_required\"");
     }
 }

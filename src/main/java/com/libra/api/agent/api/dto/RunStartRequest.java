@@ -16,7 +16,9 @@ public record RunStartRequest(
     String trigger,
 
     @Size(max = 120)
-    String thread_id
+    String thread_id,
+
+    boolean approval_required
 
 ) {
     public RunStartRequest {

@@ -48,7 +48,7 @@ Swagger UI:
 | POST | `/api/auth/signup` | public | `{email, password, displayName?}` |
 | POST | `/api/auth/login` | public | `{email, password}` → JWT |
 | GET | `/api/auth/me` | bearer | 현재 사용자 |
-| POST | `/api/runs` | bearer | agent 실행 시작 + SSE relay |
+| POST | `/api/runs` | bearer | agent 실행 시작 + SSE relay. `approval_required=true` 이면 HITL interrupt 흐름 |
 | POST | `/api/runs/{threadId}/resume` | bearer | agent 실행 재개 + SSE relay |
 | GET | `/api/docs` | public | Swagger UI |
 | GET | `/api/openapi` | public | OpenAPI JSON |
@@ -74,6 +74,5 @@ Swagger UI:
 - `jpa.hibernate.ddl-auto: validate` (스키마는 Flyway 단일 소스)
 
 ## 다음 작업
-- `libra-agent` 호출 클라이언트 (`agent/AgentClient`)
-- SSE relay 컨트롤러 (`/api/runs`, `/api/runs/{id}/stream`, `/api/runs/{id}/resume`)
 - 회원가입 보강 — 이메일 verify / 비번 reset / 탈퇴
+- agent RunEvent 스키마 확정 후 OpenAPI 예시 보강
