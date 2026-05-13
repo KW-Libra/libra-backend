@@ -16,7 +16,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 /**
  * Stateless JWT 인증. CSRF 끄고 세션 X.
- * /api/auth/signup, /api/auth/login, /health 만 public.
+ * /api/auth/signup, /api/auth/login, /health, Swagger/OpenAPI 만 public.
  */
 @Configuration
 public class SecurityConfig {
@@ -38,6 +38,12 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.POST, "/api/auth/signup", "/api/auth/login").permitAll()
                 .requestMatchers(HttpMethod.GET, "/health", "/actuator/**").permitAll()
+                .requestMatchers(HttpMethod.GET,
+                    "/swagger-ui.html",
+                    "/swagger-ui/**",
+                    "/v3/api-docs",
+                    "/v3/api-docs/**"
+                ).permitAll()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(correlationIdFilter, UsernamePasswordAuthenticationFilter.class)

@@ -7,6 +7,7 @@ Libra Spring Boot API. 멀티에이전트 의사결정 거버넌스 시스템의
 - Spring Boot 4.0 + Spring Framework 7 + Jakarta EE 11
 - PostgreSQL 16 + Flyway + JPA (`ddl-auto: validate`)
 - JWT (jjwt 0.12)
+- Swagger UI / OpenAPI (springdoc)
 - Gradle 8.14.3+ Kotlin DSL — *Spring Boot 4.0 플러그인이 Gradle 8.14+ 또는 9.x 요구* (8.10/8.13 안 됨)
 
 ## 의사결정 (왜 이렇게?)
@@ -32,6 +33,13 @@ gradle wrapper --gradle-version 8.14.3
 
 http://localhost:8080
 
+Swagger UI:
+
+- local: http://localhost:8080/swagger-ui.html
+- prod: https://3-34-80-58.nip.io/swagger-ui.html
+
+로그인 API로 받은 `accessToken`을 Swagger UI의 `Authorize` 버튼에 Bearer token으로 넣으면 보호된 API를 바로 호출할 수 있다.
+
 ## 엔드포인트 (현재 뼈대)
 
 | Method | Path | Auth | 비고 |
@@ -40,6 +48,8 @@ http://localhost:8080
 | POST | `/api/auth/signup` | public | `{email, password, displayName?}` |
 | POST | `/api/auth/login` | public | `{email, password}` → JWT |
 | GET | `/api/auth/me` | bearer | 현재 사용자 |
+| GET | `/swagger-ui.html` | public | Swagger UI |
+| GET | `/v3/api-docs` | public | OpenAPI JSON |
 
 ## Demo 계정 (auto-seeded)
 - `demo@libra.local` / `demo1234`
