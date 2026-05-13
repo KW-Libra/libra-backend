@@ -1,0 +1,63 @@
+spring:
+  application:
+    name: libra-backend
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/libra}
+    username: ${DB_USER:libra}
+    password: ${DB_PASSWORD:libra}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+  jpa:
+    hibernate:
+      ddl-auto: validate          # Flyway 가 스키마 단일 소스
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc.time_zone: UTC
+        format_sql: true
+    open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+server:
+  port: ${SERVER_PORT:8080}
+  forward-headers-strategy: framework
+  shutdown: graceful
+  servlet:
+    encoding:
+      charset: UTF-8
+      force: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: never
+
+libra:
+  auth:
+    jwt:
+      secret: ${JWT_SECRET:please-change-me-to-a-long-random-secret-min-256-bits-for-prod-only-dev-default}
+      ttl-seconds: ${JWT_TTL_SECONDS:86400}
+      issuer: libra-api
+  cors:
+    allowed-origins:
+      - ${FRONTEND_ORIGIN:http://localhost:5173}
+  agent:
+    base-url: ${AGENT_BASE_URL:http://localhost:8000}
+
+logging:
+  level:
+    root: INFO
+    com.libra: DEBUG
+    org.springframework.security: INFO

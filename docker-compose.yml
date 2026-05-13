@@ -1,0 +1,23 @@
+# 개발용 — Postgres 만 띄움. backend 는 ./gradlew bootRun 로 호스트에서 실행.
+# 운영 (EC2) 에선 별도 compose 또는 systemd 로.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: libra-pg-dev
+    environment:
+      POSTGRES_DB: libra
+      POSTGRES_USER: libra
+      POSTGRES_PASSWORD: libra
+    ports:
+      - "5432:5432"
+    volumes:
+      - libra_pg_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U libra -d libra"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  libra_pg_dev:
