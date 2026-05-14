@@ -61,9 +61,6 @@ public class KisOrderAudit {
     @Column(name = "exchange_id", nullable = false, length = 16)
     private String exchangeId;
 
-    @Column(name = "dry_run", nullable = false)
-    private boolean dryRun;
-
     @Column(name = "trading_enabled", nullable = false)
     private boolean tradingEnabled;
 
@@ -118,7 +115,6 @@ public class KisOrderAudit {
         audit.price = request.price();
         audit.orderDivision = request.orderDivision();
         audit.exchangeId = request.exchangeId();
-        audit.dryRun = request.isDryRun();
         audit.tradingEnabled = tradingEnabled;
         audit.requestJson = requestJson;
         audit.traceId = traceId;
@@ -126,7 +122,7 @@ public class KisOrderAudit {
     }
 
     public void markCompleted(KisOrderResponse response, String responseJson) {
-        this.status = response.dryRun() ? KisOrderAuditStatus.DRY_RUN : KisOrderAuditStatus.SUBMITTED;
+        this.status = KisOrderAuditStatus.SUBMITTED;
         this.brokerMessage = truncate(response.message(), 500);
         this.brokerOrderNo = truncate(firstRawValue(response.raw(), "ODNO", "odno", "ord_no"), 64);
         this.responseJson = responseJson;
@@ -159,7 +155,6 @@ public class KisOrderAudit {
     public BigDecimal getPrice() { return price; }
     public String getOrderDivision() { return orderDivision; }
     public String getExchangeId() { return exchangeId; }
-    public boolean isDryRun() { return dryRun; }
     public boolean isTradingEnabled() { return tradingEnabled; }
     public String getBrokerOrderNo() { return brokerOrderNo; }
     public String getBrokerMessage() { return brokerMessage; }

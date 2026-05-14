@@ -5,7 +5,6 @@ import java.util.Map;
 import java.util.UUID;
 
 public record KisOrderResponse(
-    boolean dryRun,
     boolean submitted,
     String environment,
     KisOrderSide side,
@@ -19,23 +18,6 @@ public record KisOrderResponse(
     UUID auditId
 ) {
 
-    public static KisOrderResponse dryRun(String environment, KisOrderRequest request) {
-        return new KisOrderResponse(
-            true,
-            false,
-            environment,
-            request.side(),
-            request.symbol(),
-            request.quantity(),
-            request.price(),
-            request.orderDivision(),
-            request.exchangeId(),
-            "dry_run_only",
-            Map.of(),
-            null
-        );
-    }
-
     public static KisOrderResponse submitted(
         String environment,
         KisOrderRequest request,
@@ -43,7 +25,6 @@ public record KisOrderResponse(
         Map<String, Object> raw
     ) {
         return new KisOrderResponse(
-            false,
             true,
             environment,
             request.side(),
@@ -60,7 +41,6 @@ public record KisOrderResponse(
 
     public KisOrderResponse withAuditId(UUID auditId) {
         return new KisOrderResponse(
-            dryRun,
             submitted,
             environment,
             side,

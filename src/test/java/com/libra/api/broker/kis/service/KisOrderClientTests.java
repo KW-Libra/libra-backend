@@ -1,10 +1,8 @@
 package com.libra.api.broker.kis.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.libra.api.broker.kis.api.dto.KisOrderRequest;
-import com.libra.api.broker.kis.api.dto.KisOrderResponse;
 import com.libra.api.broker.kis.api.dto.KisOrderSide;
 import com.libra.api.broker.kis.config.KisProperties;
 import com.libra.api.common.error.ApiException;
@@ -14,27 +12,6 @@ import java.net.URI;
 import org.junit.jupiter.api.Test;
 
 class KisOrderClientTests {
-
-    @Test
-    void dryRunDoesNotRequireTradingToBeEnabled() {
-        KisProperties properties = properties(false);
-        KisOrderClient client = new KisOrderClient(properties, new KisAuthClient(properties));
-
-        KisOrderResponse response = client.placeCashOrder(new KisOrderRequest(
-            KisOrderSide.BUY,
-            "005930",
-            1,
-            new BigDecimal("70000"),
-            "00",
-            "KRX",
-            true
-        ));
-
-        assertThat(response.dryRun()).isTrue();
-        assertThat(response.submitted()).isFalse();
-        assertThat(response.symbol()).isEqualTo("005930");
-        assertThat(response.side()).isEqualTo(KisOrderSide.BUY);
-    }
 
     @Test
     void liveOrderRequiresExplicitTradingFlag() {
@@ -47,8 +24,7 @@ class KisOrderClientTests {
             1,
             BigDecimal.ZERO,
             "01",
-            "KRX",
-            false
+            "KRX"
         )))
             .isInstanceOf(ApiException.class)
             .extracting("code")

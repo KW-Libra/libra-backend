@@ -20,7 +20,6 @@ class KisOrderAuditTests {
             3,
             BigDecimal.ZERO,
             null,
-            null,
             null
         );
 
@@ -34,37 +33,10 @@ class KisOrderAuditTests {
         );
 
         assertThat(audit.getStatus()).isEqualTo(KisOrderAuditStatus.REQUESTED);
-        assertThat(audit.isDryRun()).isTrue();
         assertThat(audit.getOrderDivision()).isEqualTo("01");
         assertThat(audit.getExchangeId()).isEqualTo("KRX");
         assertThat(audit.isTradingEnabled()).isFalse();
         assertThat(audit.getTraceId()).isEqualTo("trace-1");
-    }
-
-    @Test
-    void completedDryRunMovesAuditToDryRunStatus() {
-        KisOrderRequest request = new KisOrderRequest(
-            KisOrderSide.SELL,
-            "005930",
-            1,
-            new BigDecimal("70000"),
-            "00",
-            "KRX",
-            true
-        );
-        KisOrderAudit audit = KisOrderAudit.requested(
-            UUID.randomUUID(),
-            "paper",
-            false,
-            request,
-            "{}",
-            "trace-1"
-        );
-
-        audit.markCompleted(KisOrderResponse.dryRun("paper", request), "{}");
-
-        assertThat(audit.getStatus()).isEqualTo(KisOrderAuditStatus.DRY_RUN);
-        assertThat(audit.getBrokerMessage()).isEqualTo("dry_run_only");
     }
 
     @Test
@@ -75,8 +47,7 @@ class KisOrderAuditTests {
             1,
             new BigDecimal("70000"),
             "00",
-            "KRX",
-            false
+            "KRX"
         );
         KisOrderAudit audit = KisOrderAudit.requested(
             UUID.randomUUID(),
@@ -107,8 +78,7 @@ class KisOrderAuditTests {
             1,
             BigDecimal.ZERO,
             null,
-            null,
-            false
+            null
         );
         KisOrderAudit audit = KisOrderAudit.requested(
             UUID.randomUUID(),

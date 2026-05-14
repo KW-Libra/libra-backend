@@ -32,9 +32,6 @@ public class KisOrderClient {
     }
 
     public KisOrderResponse placeCashOrder(KisOrderRequest request) {
-        if (request.isDryRun()) {
-            return KisOrderResponse.dryRun(properties.environment().name().toLowerCase(), request);
-        }
         ensureTradingEnabled();
 
         Map<String, String> body = orderBody(request);

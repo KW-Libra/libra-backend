@@ -12,8 +12,7 @@ public record KisOrderRequest(
     @Min(1) long quantity,
     BigDecimal price,
     String orderDivision,
-    String exchangeId,
-    Boolean dryRun
+    String exchangeId
 ) {
 
     public KisOrderRequest {
@@ -23,15 +22,8 @@ public record KisOrderRequest(
         if (exchangeId == null || exchangeId.isBlank()) {
             exchangeId = "KRX";
         }
-        if (dryRun == null) {
-            dryRun = true;
-        }
         if (price == null) {
             price = BigDecimal.ZERO;
         }
-    }
-
-    public boolean isDryRun() {
-        return Boolean.TRUE.equals(dryRun);
     }
 }

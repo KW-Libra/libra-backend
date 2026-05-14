@@ -55,7 +55,7 @@ Swagger UI:
 | GET | `/api/market/kis/symbols/{symbol}` | bearer | 현재가 메타데이터 기반 종목 코드 확인 |
 | GET | `/api/broker/kis/account/balance` | bearer | KIS 국내주식 계좌 잔고/보유종목 조회 + 기본 portfolio snapshot 저장. `saveSnapshot=false` 로 저장 생략 |
 | GET | `/api/broker/kis/account/buyable` | bearer | KIS 종목별 매수가능 금액/수량 조회. `symbol`, `price`, `orderDivision` |
-| POST | `/api/broker/kis/orders/cash` | bearer | KIS 국내주식 현금주문. 기본 `dryRun=true`; 실주문은 `KIS_TRADING_ENABLED=true` 필요 |
+| POST | `/api/broker/kis/orders/cash` | bearer | KIS 국내주식 현금주문. 모의투자는 KIS `paper` 환경을 사용하며, 주문 전송은 `KIS_TRADING_ENABLED=true` 필요 |
 | GET | `/api/broker/kis/orders/audits` | bearer | 내 KIS 주문 audit log 최근 목록 |
 | GET | `/api/broker/kis/orders/audits/{id}` | bearer | 내 KIS 주문 audit log 단건 조회 |
 | GET | `/api/portfolio/snapshots` | bearer | 내 portfolio snapshot 최근 목록 |

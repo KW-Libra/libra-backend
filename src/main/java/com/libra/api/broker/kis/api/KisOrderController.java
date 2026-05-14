@@ -48,7 +48,7 @@ public class KisOrderController {
         this.auditService = auditService;
     }
 
-    @Operation(summary = "Place or dry-run a KIS domestic cash stock order")
+    @Operation(summary = "Place a KIS domestic cash stock order")
     @PostMapping("/cash")
     public KisOrderResponse cashOrder(
         @Parameter(hidden = true) @AuthenticationPrincipal User user,
