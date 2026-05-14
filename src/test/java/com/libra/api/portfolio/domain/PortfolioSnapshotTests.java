@@ -1,17 +1,19 @@
-package com.libra.api.broker.kis.api.dto;
+package com.libra.api.portfolio.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.libra.api.broker.kis.api.dto.KisBalanceResponse;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
-class KisBalanceResponseTests {
+class PortfolioSnapshotTests {
 
     @Test
-    void mapsKisBalanceFieldsToStableResponse() {
-        KisBalanceResponse response = KisBalanceResponse.from(
+    void kisBalanceSnapshotCapturesStableSummaryFields() {
+        KisBalanceResponse balance = KisBalanceResponse.from(
             "paper",
             List.of(Map.of(
                 "pdno", "005930",
@@ -40,13 +42,18 @@ class KisBalanceResponseTests {
             ""
         );
 
-        assertThat(response.snapshotId()).isNull();
-        assertThat(response.environment()).isEqualTo("paper");
-        assertThat(response.holdings()).hasSize(1);
-        assertThat(response.holdings().getFirst().symbol()).isEqualTo("005930");
-        assertThat(response.holdings().getFirst().quantity()).isEqualByComparingTo(new BigDecimal("10"));
-        assertThat(response.holdings().getFirst().profitLossRate()).isEqualByComparingTo(new BigDecimal("2.86"));
-        assertThat(response.summary().depositAmount()).isEqualByComparingTo(new BigDecimal("1000000"));
-        assertThat(response.summary().profitLossAmount()).isEqualByComparingTo(new BigDecimal("20000"));
+        PortfolioSnapshot snapshot = PortfolioSnapshot.fromKisBalance(
+            UUID.randomUUID(),
+            balance,
+            "{\"environment\":\"paper\"}",
+            "trace-1"
+        );
+
+        assertThat(snapshot.getProvider()).isEqualTo("KIS");
+        assertThat(snapshot.getSource()).isEqualTo("kis_balance");
+        assertThat(snapshot.getHoldingsCount()).isEqualTo(1);
+        assertThat(snapshot.getTotalValuationAmount()).isEqualByComparingTo(new BigDecimal("1720000"));
+        assertThat(snapshot.getProfitLossRate()).isEqualByComparingTo(new BigDecimal("1.18"));
+        assertThat(snapshot.getTraceId()).isEqualTo("trace-1");
     }
 }

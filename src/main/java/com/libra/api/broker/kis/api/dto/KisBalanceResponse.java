@@ -3,8 +3,10 @@ package com.libra.api.broker.kis.api.dto;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 public record KisBalanceResponse(
+    UUID snapshotId,
     String environment,
     List<KisHolding> holdings,
     AccountSummary summary,
@@ -23,6 +25,7 @@ public record KisBalanceResponse(
         String nextContextNk
     ) {
         return new KisBalanceResponse(
+            null,
             environment,
             holdings.stream()
                 .map(KisHolding::from)
@@ -32,6 +35,19 @@ public record KisBalanceResponse(
             hasNextPage,
             blankToEmpty(nextContextFk),
             blankToEmpty(nextContextNk)
+        );
+    }
+
+    public KisBalanceResponse withSnapshotId(UUID snapshotId) {
+        return new KisBalanceResponse(
+            snapshotId,
+            environment,
+            holdings,
+            summary,
+            rawSummary,
+            hasNextPage,
+            nextContextFk,
+            nextContextNk
         );
     }
 

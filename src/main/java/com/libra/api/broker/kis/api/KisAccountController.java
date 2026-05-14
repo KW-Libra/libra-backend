@@ -3,13 +3,19 @@ package com.libra.api.broker.kis.api;
 import com.libra.api.broker.kis.api.dto.KisBalanceResponse;
 import com.libra.api.broker.kis.api.dto.KisBuyableCashResponse;
 import com.libra.api.broker.kis.service.KisAccountClient;
+import com.libra.api.auth.domain.User;
+import com.libra.api.common.error.ApiException;
+import com.libra.api.common.error.ErrorCode;
 import com.libra.api.config.OpenApiConfig;
+import com.libra.api.portfolio.domain.PortfolioSnapshot;
+import com.libra.api.portfolio.service.PortfolioSnapshotService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Pattern;
 import java.math.BigDecimal;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -24,15 +30,25 @@ import org.springframework.web.bind.annotation.RestController;
 public class KisAccountController {
 
     private final KisAccountClient accountClient;
+    private final PortfolioSnapshotService snapshots;
 
-    public KisAccountController(KisAccountClient accountClient) {
+    public KisAccountController(KisAccountClient accountClient, PortfolioSnapshotService snapshots) {
         this.accountClient = accountClient;
+        this.snapshots = snapshots;
     }
 
     @Operation(summary = "Get KIS domestic stock account balance and holdings")
     @GetMapping("/balance")
-    public KisBalanceResponse balance() {
-        return accountClient.balance();
+    public KisBalanceResponse balance(
+        @Parameter(hidden = true) @AuthenticationPrincipal User user,
+        @RequestParam(defaultValue = "true") boolean saveSnapshot
+    ) {
+        KisBalanceResponse balance = accountClient.balance();
+        if (!saveSnapshot) {
+            return balance;
+        }
+        PortfolioSnapshot snapshot = snapshots.saveKisBalance(requireUser(user), balance);
+        return balance.withSnapshotId(snapshot.getId());
     }
 
     @Operation(summary = "Get KIS buyable cash and quantity for a domestic stock")
@@ -46,5 +62,12 @@ public class KisAccountController {
         @RequestParam(defaultValue = "01") String orderDivision
     ) {
         return accountClient.buyableCash(symbol, price, orderDivision);
+    }
+
+    private static User requireUser(User user) {
+        if (user == null) {
+            throw new ApiException(ErrorCode.AUTH_TOKEN_INVALID);
+        }
+        return user;
     }
 }
