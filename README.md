@@ -53,6 +53,8 @@ Swagger UI:
 | GET | `/api/market/kis/status` | bearer | KIS 연동 설정 상태. 키 값은 노출하지 않음 |
 | GET | `/api/market/kis/quotes/{symbol}` | bearer | KIS 국내주식 현재가 조회. 예: `005930` |
 | GET | `/api/market/kis/symbols/{symbol}` | bearer | 현재가 메타데이터 기반 종목 코드 확인 |
+| GET | `/api/broker/kis/account/balance` | bearer | KIS 국내주식 계좌 잔고/보유종목 조회 |
+| GET | `/api/broker/kis/account/buyable` | bearer | KIS 종목별 매수가능 금액/수량 조회. `symbol`, `price`, `orderDivision` |
 | POST | `/api/broker/kis/orders/cash` | bearer | KIS 국내주식 현금주문. 기본 `dryRun=true`; 실주문은 `KIS_TRADING_ENABLED=true` 필요 |
 | GET | `/api/docs` | public | Swagger UI |
 | GET | `/api/openapi` | public | OpenAPI JSON |
@@ -69,7 +71,7 @@ Swagger UI:
 | CORS | `config/CorsConfig` (allowed-origins 는 `libra.cors.allowed-origins` 설정) |
 | JWT 필터 | `auth/security/JwtAuthFilter` — `Authorization: Bearer` *또는* `?token=` (SSE 호환) |
 | Agent relay | `agent/AgentSseClient` — backend JWT 인증 후 agent SSE 를 Vue 로 중계 |
-| KIS broker | `broker/kis` — 한국투자증권 시세/종목/주문 경계. agent 에 broker key 를 주지 않음 |
+| KIS broker | `broker/kis` — 한국투자증권 시세/계좌/주문 경계. agent 에 broker key 를 주지 않음 |
 | correlation_id | `common/correlation/CorrelationIdFilter` — `X-Trace-Id` 헤더 + MDC `traceId` |
 | 에러 응답 | `common/error/GlobalExceptionHandler` — RFC 7807 ProblemDetail |
 | 로깅 | `logback-spring.xml` — local 은 텍스트, 그 외 JSON (logstash encoder) |
@@ -79,5 +81,7 @@ Swagger UI:
 - `jpa.hibernate.ddl-auto: validate` (스키마는 Flyway 단일 소스)
 
 ## 다음 작업
+- KIS 주문 요청/응답 audit log 저장
+- KIS 주문내역/미체결 조회
 - 회원가입 보강 — 이메일 verify / 비번 reset / 탈퇴
 - agent RunEvent 스키마 확정 후 OpenAPI 예시 보강
