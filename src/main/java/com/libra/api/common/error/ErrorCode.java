@@ -20,7 +20,12 @@ public enum ErrorCode {
 
     // Downstream (libra-agent)
     AGENT_UNAVAILABLE(HttpStatus.BAD_GATEWAY, "에이전트 서비스에 접근할 수 없습니다"),
-    AGENT_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "에이전트 응답이 지연됩니다");
+    AGENT_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "에이전트 응답이 지연됩니다"),
+
+    // Broker / market data
+    KIS_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE, "한국투자증권 API 설정이 필요합니다"),
+    KIS_TRADING_DISABLED(HttpStatus.FORBIDDEN, "한국투자증권 주문 기능이 비활성화되어 있습니다"),
+    KIS_UNAVAILABLE(HttpStatus.BAD_GATEWAY, "한국투자증권 API 응답을 처리할 수 없습니다");
 
     private final HttpStatus status;
     private final String defaultMessage;

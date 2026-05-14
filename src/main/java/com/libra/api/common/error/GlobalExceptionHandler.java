@@ -1,6 +1,7 @@
 package com.libra.api.common.error;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolationException;
 import java.net.URI;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -38,6 +39,18 @@ public class GlobalExceptionHandler {
             .map(fe -> fe.getField() + ": " + fe.getDefaultMessage())
             .collect(Collectors.joining(", "));
         log.warn("Validation failed traceId={} path={} detail={}",
+                 MDC.get("traceId"), req.getRequestURI(), detail);
+        return ResponseEntity.badRequest()
+            .body(problem(400, ErrorCode.VALIDATION_FAILED.name(), detail, req));
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ProblemDetail> handleConstraintViolation(ConstraintViolationException ex,
+                                                                   HttpServletRequest req) {
+        String detail = ex.getConstraintViolations().stream()
+            .map(v -> v.getPropertyPath() + ": " + v.getMessage())
+            .collect(Collectors.joining(", "));
+        log.warn("Constraint violation traceId={} path={} detail={}",
                  MDC.get("traceId"), req.getRequestURI(), detail);
         return ResponseEntity.badRequest()
             .body(problem(400, ErrorCode.VALIDATION_FAILED.name(), detail, req));

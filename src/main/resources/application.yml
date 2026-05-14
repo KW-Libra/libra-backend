@@ -69,6 +69,17 @@ libra:
     base-url: ${AGENT_BASE_URL:http://localhost:8000}
     connect-timeout: ${AGENT_CONNECT_TIMEOUT:5s}
     stream-timeout: ${AGENT_STREAM_TIMEOUT:30m}
+  kis:
+    enabled: ${KIS_ENABLED:false}
+    trading-enabled: ${KIS_TRADING_ENABLED:false}
+    environment: ${KIS_ENVIRONMENT:paper} # paper | prod
+    app-key: ${KIS_APP_KEY:}
+    app-secret: ${KIS_APP_SECRET:}
+    account-number: ${KIS_ACCOUNT_NUMBER:}
+    account-product-code: ${KIS_ACCOUNT_PRODUCT_CODE:01}
+    hts-id: ${KIS_HTS_ID:}
+    prod-base-url: ${KIS_PROD_BASE_URL:https://openapi.koreainvestment.com:9443}
+    paper-base-url: ${KIS_PAPER_BASE_URL:https://openapivts.koreainvestment.com:29443}
 
 logging:
   level:
