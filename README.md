@@ -13,7 +13,7 @@ Libra Spring Boot API. 멀티에이전트 의사결정 거버넌스 시스템의
 ## 의사결정 (왜 이렇게?)
 - **A-2**: backend 는 Postgres 직접 두드리지 않음 — 오직 `users` 테이블만 소유. 도메인 데이터(포트폴리오·결정 이력·보고서 메타)는 전부 `libra-agent` REST 경유.
 - **B-2**: `libra-agent` 의 SSE 를 그대로 Vue 까지 흘림 (passthrough). backend 는 인증/인가 + traceId 만 보탬.
-- **Flyway**: 시연 destroy → 재배포 시 V1 만 다시 돌면 같은 스키마. `V2__seed` 안 만들고 `DemoDataSeeder` 컴포넌트가 profile=local/dev/demo 일 때 demo user 1명 자동 생성.
+- **Flyway**: 스키마는 migration 이 단일 소스. seed migration 은 만들지 않고 `DemoDataSeeder` 컴포넌트가 profile=local/dev/demo 일 때 demo user 1명 자동 생성.
 
 ## Run (local)
 
@@ -56,6 +56,8 @@ Swagger UI:
 | GET | `/api/broker/kis/account/balance` | bearer | KIS 국내주식 계좌 잔고/보유종목 조회 |
 | GET | `/api/broker/kis/account/buyable` | bearer | KIS 종목별 매수가능 금액/수량 조회. `symbol`, `price`, `orderDivision` |
 | POST | `/api/broker/kis/orders/cash` | bearer | KIS 국내주식 현금주문. 기본 `dryRun=true`; 실주문은 `KIS_TRADING_ENABLED=true` 필요 |
+| GET | `/api/broker/kis/orders/audits` | bearer | 내 KIS 주문 audit log 최근 목록 |
+| GET | `/api/broker/kis/orders/audits/{id}` | bearer | 내 KIS 주문 audit log 단건 조회 |
 | GET | `/api/docs` | public | Swagger UI |
 | GET | `/api/openapi` | public | OpenAPI JSON |
 
@@ -81,7 +83,7 @@ Swagger UI:
 - `jpa.hibernate.ddl-auto: validate` (스키마는 Flyway 단일 소스)
 
 ## 다음 작업
-- KIS 주문 요청/응답 audit log 저장
 - KIS 주문내역/미체결 조회
+- 프론트 KIS 상태/잔고/audit 운영 화면
 - 회원가입 보강 — 이메일 verify / 비번 reset / 탈퇴
 - agent RunEvent 스키마 확정 후 OpenAPI 예시 보강

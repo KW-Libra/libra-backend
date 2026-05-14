@@ -2,6 +2,7 @@ package com.libra.api.broker.kis.api.dto;
 
 import java.math.BigDecimal;
 import java.util.Map;
+import java.util.UUID;
 
 public record KisOrderResponse(
     boolean dryRun,
@@ -14,7 +15,8 @@ public record KisOrderResponse(
     String orderDivision,
     String exchangeId,
     String message,
-    Map<String, Object> raw
+    Map<String, Object> raw,
+    UUID auditId
 ) {
 
     public static KisOrderResponse dryRun(String environment, KisOrderRequest request) {
@@ -29,7 +31,8 @@ public record KisOrderResponse(
             request.orderDivision(),
             request.exchangeId(),
             "dry_run_only",
-            Map.of()
+            Map.of(),
+            null
         );
     }
 
@@ -50,7 +53,25 @@ public record KisOrderResponse(
             request.orderDivision(),
             request.exchangeId(),
             message,
-            Map.copyOf(raw)
+            Map.copyOf(raw),
+            null
+        );
+    }
+
+    public KisOrderResponse withAuditId(UUID auditId) {
+        return new KisOrderResponse(
+            dryRun,
+            submitted,
+            environment,
+            side,
+            symbol,
+            quantity,
+            price,
+            orderDivision,
+            exchangeId,
+            message,
+            raw,
+            auditId
         );
     }
 }
