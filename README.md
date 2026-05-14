@@ -11,7 +11,7 @@ Libra Spring Boot API. 멀티에이전트 의사결정 거버넌스 시스템의
 - Gradle 8.14.3+ Kotlin DSL — *Spring Boot 4.0 플러그인이 Gradle 8.14+ 또는 9.x 요구* (8.10/8.13 안 됨)
 
 ## 의사결정 (왜 이렇게?)
-- **A-2**: backend 는 Postgres 직접 두드리지 않음 — 오직 `users` 테이블만 소유. 도메인 데이터(포트폴리오·결정 이력·보고서 메타)는 전부 `libra-agent` REST 경유.
+- **Backend-owned domain DB**: backend 가 인증/사용자, 포트폴리오, 브로커 연동, 주문/audit 같은 비즈니스 영속 데이터를 소유한다. `libra-agent` 는 판단 워크플로우를 수행하고, 도메인 데이터의 system of record 가 되지 않는다.
 - **B-2**: `libra-agent` 의 SSE 를 그대로 Vue 까지 흘림 (passthrough). backend 는 인증/인가 + traceId 만 보탬.
 - **Flyway**: 스키마는 migration 이 단일 소스. seed migration 은 만들지 않고 `DemoDataSeeder` 컴포넌트가 profile=local/dev/demo 일 때 demo user 1명 자동 생성.
 
