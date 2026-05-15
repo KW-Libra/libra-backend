@@ -65,10 +65,12 @@ jobs:
           {
             "commands": [
               "set -eu",
+              "test -r /opt/libra/backend/.env || { echo 'Missing /opt/libra/backend/.env. Run the initial backend bootstrap before GitHub Actions deploy.' >&2; exit 2; }",
               "aws s3 cp s3://${DEPLOY_BUCKET}/deploy-artifacts/backend/${GITHUB_SHA}/libra-backend.jar /tmp/libra-backend.jar",
               "install -o libra -g libra -m 0640 /tmp/libra-backend.jar /opt/libra/backend/libra-backend.jar",
+              "systemctl daemon-reload",
               "systemctl restart libra-backend",
-              "for i in \$(seq 1 30); do if curl -fsS http://127.0.0.1:8080/health; then exit 0; fi; systemctl is-active --quiet libra-backend || break; sleep 3; done",
+              "for i in \$(seq 1 60); do if curl -fsS http://127.0.0.1:8080/health; then exit 0; fi; sleep 3; done",
               "systemctl status libra-backend --no-pager || true",
               "journalctl -u libra-backend -n 120 --no-pager",
               "exit 1"
