@@ -1,6 +1,7 @@
 package com.libra.api.broker.kis.api.dto;
 
 import com.libra.api.broker.kis.config.KisProperties;
+import java.math.BigDecimal;
 
 public record KisStatusResponse(
     boolean enabled,
@@ -9,7 +10,11 @@ public record KisStatusResponse(
     String baseUrl,
     boolean restConfigured,
     boolean accountConfigured,
-    boolean webSocketConfigured
+    boolean webSocketConfigured,
+    long maxOrderQuantity,
+    BigDecimal maxOrderAmount,
+    boolean symbolAllowListEnabled,
+    int allowedSymbolsCount
 ) {
 
     public static KisStatusResponse from(KisProperties properties) {
@@ -20,7 +25,11 @@ public record KisStatusResponse(
             properties.baseUrl().toString(),
             properties.hasRestCredentials(),
             properties.hasAccount(),
-            properties.hasWebSocketCredentials()
+            properties.hasWebSocketCredentials(),
+            properties.maxOrderQuantity(),
+            properties.maxOrderAmount(),
+            properties.symbolAllowListEnabled(),
+            properties.allowedSymbols().size()
         );
     }
 }

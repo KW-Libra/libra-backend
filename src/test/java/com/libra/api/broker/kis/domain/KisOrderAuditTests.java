@@ -29,6 +29,7 @@ class KisOrderAuditTests {
             false,
             request,
             "{}",
+            "order-key-1",
             "trace-1"
         );
 
@@ -36,6 +37,7 @@ class KisOrderAuditTests {
         assertThat(audit.getOrderDivision()).isEqualTo("01");
         assertThat(audit.getExchangeId()).isEqualTo("KRX");
         assertThat(audit.isTradingEnabled()).isFalse();
+        assertThat(audit.getIdempotencyKey()).isEqualTo("order-key-1");
         assertThat(audit.getTraceId()).isEqualTo("trace-1");
     }
 
@@ -55,6 +57,7 @@ class KisOrderAuditTests {
             true,
             request,
             "{}",
+            null,
             "trace-1"
         );
 
@@ -86,6 +89,7 @@ class KisOrderAuditTests {
             false,
             request,
             "{}",
+            null,
             "trace-1"
         );
 

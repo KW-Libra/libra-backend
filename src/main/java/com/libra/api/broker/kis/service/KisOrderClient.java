@@ -21,17 +21,20 @@ public class KisOrderClient {
 
     private final KisProperties properties;
     private final KisAuthClient authClient;
+    private final KisOrderRiskGuard riskGuard;
     private final RestClient restClient;
 
-    public KisOrderClient(KisProperties properties, KisAuthClient authClient) {
+    public KisOrderClient(KisProperties properties, KisAuthClient authClient, KisOrderRiskGuard riskGuard) {
         this.properties = properties;
         this.authClient = authClient;
+        this.riskGuard = riskGuard;
         this.restClient = RestClient.builder()
             .baseUrl(properties.baseUrl().toString())
             .build();
     }
 
     public KisOrderResponse placeCashOrder(KisOrderRequest request) {
+        riskGuard.validate(request);
         ensureTradingEnabled();
 
         Map<String, String> body = orderBody(request);

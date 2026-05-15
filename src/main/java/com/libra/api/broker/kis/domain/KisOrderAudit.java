@@ -64,6 +64,9 @@ public class KisOrderAudit {
     @Column(name = "trading_enabled", nullable = false)
     private boolean tradingEnabled;
 
+    @Column(name = "idempotency_key", length = 80)
+    private String idempotencyKey;
+
     @Column(name = "broker_order_no", length = 64)
     private String brokerOrderNo;
 
@@ -103,6 +106,7 @@ public class KisOrderAudit {
         boolean tradingEnabled,
         KisOrderRequest request,
         String requestJson,
+        String idempotencyKey,
         String traceId
     ) {
         KisOrderAudit audit = new KisOrderAudit();
@@ -116,6 +120,7 @@ public class KisOrderAudit {
         audit.orderDivision = request.orderDivision();
         audit.exchangeId = request.exchangeId();
         audit.tradingEnabled = tradingEnabled;
+        audit.idempotencyKey = idempotencyKey;
         audit.requestJson = requestJson;
         audit.traceId = traceId;
         return audit;
@@ -156,6 +161,7 @@ public class KisOrderAudit {
     public String getOrderDivision() { return orderDivision; }
     public String getExchangeId() { return exchangeId; }
     public boolean isTradingEnabled() { return tradingEnabled; }
+    public String getIdempotencyKey() { return idempotencyKey; }
     public String getBrokerOrderNo() { return brokerOrderNo; }
     public String getBrokerMessage() { return brokerMessage; }
     public String getErrorCode() { return errorCode; }

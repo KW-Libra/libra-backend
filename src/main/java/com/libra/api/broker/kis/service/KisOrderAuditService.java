@@ -9,11 +9,13 @@ import com.libra.api.broker.kis.api.dto.KisOrderResponse;
 import com.libra.api.broker.kis.config.KisProperties;
 import com.libra.api.broker.kis.domain.KisOrderAudit;
 import com.libra.api.broker.kis.domain.KisOrderAuditRepository;
+import com.libra.api.broker.kis.domain.KisOrderAuditStatus;
 import com.libra.api.common.correlation.CorrelationIdFilter;
 import com.libra.api.common.error.ApiException;
 import com.libra.api.common.error.ErrorCode;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.MDC;
 import org.springframework.data.domain.PageRequest;
@@ -40,16 +42,26 @@ public class KisOrderAuditService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public KisOrderAudit recordRequested(User user, KisOrderRequest request) {
+    public KisOrderAudit recordRequested(User user, KisOrderRequest request, String idempotencyKey) {
         KisOrderAudit audit = KisOrderAudit.requested(
             user.getId(),
             properties.environment().name().toLowerCase(),
             properties.tradingEnabled(),
             request,
             toJson(request),
+            idempotencyKey,
             MDC.get(CorrelationIdFilter.MDC_KEY)
         );
         return audits.save(audit);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<KisOrderResponse> completedResponseForIdempotencyKey(User user, String idempotencyKey) {
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            return Optional.empty();
+        }
+        return audits.findByUserIdAndIdempotencyKey(user.getId(), idempotencyKey)
+            .map(this::responseFromExistingAudit);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -101,6 +113,18 @@ public class KisOrderAuditService {
     private KisOrderAudit getAudit(UUID id) {
         return audits.findById(id)
             .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND));
+    }
+
+    private KisOrderResponse responseFromExistingAudit(KisOrderAudit audit) {
+        if (audit.getStatus() == KisOrderAuditStatus.SUBMITTED && audit.getResponseJson() != null) {
+            try {
+                return objectMapper.readValue(audit.getResponseJson(), KisOrderResponse.class)
+                    .withAuditId(audit.getId());
+            } catch (JsonProcessingException e) {
+                throw new ApiException(ErrorCode.INTERNAL_ERROR, "Failed to deserialize KIS order audit payload", e);
+            }
+        }
+        throw new ApiException(ErrorCode.KIS_ORDER_DUPLICATE, "이미 사용된 Idempotency-Key입니다");
     }
 
     private String errorJson(String code, String message) {

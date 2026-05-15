@@ -11,4 +11,6 @@ public interface KisOrderAuditRepository extends JpaRepository<KisOrderAudit, UU
     Page<KisOrderAudit> findByUserId(UUID userId, Pageable pageable);
 
     Optional<KisOrderAudit> findByIdAndUserId(UUID id, UUID userId);
+
+    Optional<KisOrderAudit> findByUserIdAndIdempotencyKey(UUID userId, String idempotencyKey);
 }

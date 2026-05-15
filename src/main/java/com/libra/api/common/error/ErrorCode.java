@@ -25,6 +25,8 @@ public enum ErrorCode {
     // Broker / market data
     KIS_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE, "한국투자증권 API 설정이 필요합니다"),
     KIS_TRADING_DISABLED(HttpStatus.FORBIDDEN, "한국투자증권 주문 기능이 비활성화되어 있습니다"),
+    KIS_ORDER_REJECTED(HttpStatus.BAD_REQUEST, "한국투자증권 주문 요청이 안전장치에 의해 거부되었습니다"),
+    KIS_ORDER_DUPLICATE(HttpStatus.CONFLICT, "이미 처리 중이거나 처리된 주문 요청입니다"),
     KIS_UNAVAILABLE(HttpStatus.BAD_GATEWAY, "한국투자증권 API 응답을 처리할 수 없습니다");
 
     private final HttpStatus status;
