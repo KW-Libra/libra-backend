@@ -3,6 +3,7 @@ package com.libra.api.config;
 import com.libra.api.auth.security.JwtAuthFilter;
 import com.libra.api.common.correlation.CorrelationIdFilter;
 import jakarta.servlet.DispatcherType;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -36,6 +37,10 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .cors(cors -> {})                              // CorsConfig.corsConfigurationSource bean 자동 사용
             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .exceptionHandling(ex -> ex
+                .authenticationEntryPoint((req, res, authEx) ->
+                    res.sendError(HttpServletResponse.SC_UNAUTHORIZED))
+            )
             .authorizeHttpRequests(auth -> auth
                 .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/auth/signup", "/api/auth/login").permitAll()
