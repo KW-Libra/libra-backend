@@ -5,8 +5,10 @@ import com.libra.api.broker.kis.api.dto.KisOrderAuditResponse;
 import com.libra.api.broker.kis.api.dto.KisOrderRequest;
 import com.libra.api.broker.kis.api.dto.KisOrderResponse;
 import com.libra.api.broker.kis.domain.KisOrderAudit;
+import com.libra.api.broker.kis.service.KisConnection;
 import com.libra.api.broker.kis.service.KisOrderAuditService;
 import com.libra.api.broker.kis.service.KisOrderClient;
+import com.libra.api.broker.kis.service.KisCredentialService;
 import com.libra.api.common.error.ApiException;
 import com.libra.api.common.error.ErrorCode;
 import com.libra.api.config.OpenApiConfig;
@@ -45,10 +47,16 @@ public class KisOrderController {
 
     private final KisOrderClient orderClient;
     private final KisOrderAuditService auditService;
+    private final KisCredentialService credentials;
 
-    public KisOrderController(KisOrderClient orderClient, KisOrderAuditService auditService) {
+    public KisOrderController(
+        KisOrderClient orderClient,
+        KisOrderAuditService auditService,
+        KisCredentialService credentials
+    ) {
         this.orderClient = orderClient;
         this.auditService = auditService;
+        this.credentials = credentials;
     }
 
     @Operation(summary = "Place a KIS domestic cash stock order")
@@ -68,9 +76,10 @@ public class KisOrderController {
             return previousResponse.get();
         }
 
-        KisOrderAudit audit = auditService.recordRequested(principal, request, normalizedIdempotencyKey);
+        KisConnection connection = credentials.resolve(principal);
+        KisOrderAudit audit = auditService.recordRequested(principal, request, normalizedIdempotencyKey, connection);
         try {
-            KisOrderResponse response = orderClient.placeCashOrder(request).withAuditId(audit.getId());
+            KisOrderResponse response = orderClient.placeCashOrder(request, connection).withAuditId(audit.getId());
             try {
                 auditService.markCompleted(audit.getId(), response);
             } catch (RuntimeException e) {

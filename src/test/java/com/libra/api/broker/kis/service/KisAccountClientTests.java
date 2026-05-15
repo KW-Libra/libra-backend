@@ -27,7 +27,8 @@ class KisAccountClientTests {
             URI.create("https://openapivts.koreainvestment.com:29443"),
             1000,
             new BigDecimal("10000000"),
-            List.of()
+            List.of(),
+            "test-credential-encryption-key-32"
         );
         KisAccountClient client = new KisAccountClient(properties, new KisAuthClient(properties));
 

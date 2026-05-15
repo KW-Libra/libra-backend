@@ -25,19 +25,19 @@ public class KisAccountClient {
 
     private final KisProperties properties;
     private final KisAuthClient authClient;
-    private final RestClient restClient;
 
     public KisAccountClient(KisProperties properties, KisAuthClient authClient) {
         this.properties = properties;
         this.authClient = authClient;
-        this.restClient = RestClient.builder()
-            .baseUrl(properties.baseUrl().toString())
-            .build();
     }
 
     public KisBalanceResponse balance() {
-        ensureConfigured();
-        String environment = environmentName();
+        return balance(KisConnection.fromProperties(properties));
+    }
+
+    public KisBalanceResponse balance(KisConnection connection) {
+        ensureConfigured(connection);
+        String environment = connection.environmentName();
         String nextFk = "";
         String nextNk = "";
         String trCont = "";
@@ -47,7 +47,7 @@ public class KisAccountClient {
 
         try {
             for (int page = 0; page < MAX_BALANCE_PAGES; page++) {
-                ResponseEntity<KisBalanceEnvelope> responseEntity = requestBalancePage(nextFk, nextNk, trCont);
+                ResponseEntity<KisBalanceEnvelope> responseEntity = requestBalancePage(connection, nextFk, nextNk, trCont);
                 KisBalanceEnvelope response = responseEntity.getBody();
                 if (response == null) {
                     throw new ApiException(ErrorCode.KIS_UNAVAILABLE, "KIS balance response is empty");
@@ -73,22 +73,31 @@ public class KisAccountClient {
     }
 
     public KisBuyableCashResponse buyableCash(String symbol, BigDecimal price, String orderDivision) {
-        ensureConfigured();
+        return buyableCash(symbol, price, orderDivision, KisConnection.fromProperties(properties));
+    }
+
+    public KisBuyableCashResponse buyableCash(
+        String symbol,
+        BigDecimal price,
+        String orderDivision,
+        KisConnection connection
+    ) {
+        ensureConfigured(connection);
         BigDecimal normalizedPrice = price == null ? BigDecimal.ZERO : price;
         String normalizedOrderDivision = normalizeOrderDivision(orderDivision);
         try {
-            KisSingleOutputEnvelope response = restClient.get()
+            KisSingleOutputEnvelope response = restClient(connection).get()
                 .uri(uriBuilder -> uriBuilder
                     .path(INQUIRE_PSBL_ORDER_PATH)
-                    .queryParam("CANO", properties.accountNumber())
-                    .queryParam("ACNT_PRDT_CD", properties.accountProductCode())
+                    .queryParam("CANO", connection.accountNumber())
+                    .queryParam("ACNT_PRDT_CD", connection.accountProductCode())
                     .queryParam("PDNO", symbol)
                     .queryParam("ORD_UNPR", normalizedPrice.toPlainString())
                     .queryParam("ORD_DVSN", normalizedOrderDivision)
                     .queryParam("CMA_EVLU_AMT_ICLD_YN", "N")
                     .queryParam("OVRS_ICLD_YN", "N")
                     .build())
-                .headers(headers -> applyKisHeaders(headers, authClient.accessToken(), buyableCashTrId(), ""))
+                .headers(headers -> applyKisHeaders(headers, authClient.accessToken(connection), buyableCashTrId(connection), "", connection))
                 .retrieve()
                 .body(KisSingleOutputEnvelope.class);
             if (response == null || response.output() == null) {
@@ -98,7 +107,7 @@ public class KisAccountClient {
                 throw new ApiException(ErrorCode.KIS_UNAVAILABLE, response.message());
             }
             return KisBuyableCashResponse.from(
-                environmentName(),
+                connection.environmentName(),
                 symbol,
                 normalizedPrice,
                 normalizedOrderDivision,
@@ -110,15 +119,16 @@ public class KisAccountClient {
     }
 
     private ResponseEntity<KisBalanceEnvelope> requestBalancePage(
+        KisConnection connection,
         String contextFk,
         String contextNk,
         String trCont
     ) {
-        return restClient.get()
+        return restClient(connection).get()
             .uri(uriBuilder -> uriBuilder
                 .path(INQUIRE_BALANCE_PATH)
-                .queryParam("CANO", properties.accountNumber())
-                .queryParam("ACNT_PRDT_CD", properties.accountProductCode())
+                .queryParam("CANO", connection.accountNumber())
+                .queryParam("ACNT_PRDT_CD", connection.accountProductCode())
                 .queryParam("AFHR_FLPR_YN", "N")
                 .queryParam("OFL_YN", "")
                 .queryParam("INQR_DVSN", "01")
@@ -129,21 +139,33 @@ public class KisAccountClient {
                 .queryParam("CTX_AREA_FK100", contextFk)
                 .queryParam("CTX_AREA_NK100", contextNk)
                 .build())
-            .headers(headers -> applyKisHeaders(headers, authClient.accessToken(), balanceTrId(), trCont))
+            .headers(headers -> applyKisHeaders(headers, authClient.accessToken(connection), balanceTrId(connection), trCont, connection))
             .retrieve()
             .toEntity(KisBalanceEnvelope.class);
     }
 
-    private void ensureConfigured() {
-        if (!properties.enabled() || !properties.hasRestCredentials() || !properties.hasAccount()) {
+    private static RestClient restClient(KisConnection connection) {
+        return RestClient.builder()
+            .baseUrl(connection.baseUrl().toString())
+            .build();
+    }
+
+    private void ensureConfigured(KisConnection connection) {
+        if (!connection.enabled() || !connection.hasRestCredentials() || !connection.hasAccount()) {
             throw new ApiException(ErrorCode.KIS_NOT_CONFIGURED);
         }
     }
 
-    private void applyKisHeaders(HttpHeaders headers, String token, String trId, String trCont) {
+    private void applyKisHeaders(
+        HttpHeaders headers,
+        String token,
+        String trId,
+        String trCont,
+        KisConnection connection
+    ) {
         headers.setBearerAuth(token);
-        headers.set("appkey", properties.appKey());
-        headers.set("appsecret", properties.appSecret());
+        headers.set("appkey", connection.appKey());
+        headers.set("appsecret", connection.appSecret());
         headers.set("tr_id", trId);
         headers.set("custtype", "P");
         if (trCont != null && !trCont.isBlank()) {
@@ -151,16 +173,12 @@ public class KisAccountClient {
         }
     }
 
-    private String balanceTrId() {
-        return properties.environment() == KisProperties.Environment.PAPER ? "VTTC8434R" : "TTTC8434R";
+    private String balanceTrId(KisConnection connection) {
+        return connection.environment() == KisProperties.Environment.PAPER ? "VTTC8434R" : "TTTC8434R";
     }
 
-    private String buyableCashTrId() {
-        return properties.environment() == KisProperties.Environment.PAPER ? "VTTC8908R" : "TTTC8908R";
-    }
-
-    private String environmentName() {
-        return properties.environment().name().toLowerCase();
+    private String buyableCashTrId(KisConnection connection) {
+        return connection.environment() == KisProperties.Environment.PAPER ? "VTTC8908R" : "TTTC8908R";
     }
 
     private static String normalizeOrderDivision(String orderDivision) {

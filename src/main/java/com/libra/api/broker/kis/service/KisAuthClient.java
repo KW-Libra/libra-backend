@@ -8,6 +8,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -20,44 +21,50 @@ public class KisAuthClient {
         DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final KisProperties properties;
-    private final RestClient restClient;
 
-    private volatile CachedToken cachedToken;
+    private final ConcurrentHashMap<String, CachedToken> cachedTokens = new ConcurrentHashMap<>();
 
     public KisAuthClient(KisProperties properties) {
         this.properties = properties;
-        this.restClient = RestClient.builder()
-            .baseUrl(properties.baseUrl().toString())
-            .build();
     }
 
     public String accessToken() {
-        ensureConfigured();
-        CachedToken token = cachedToken;
+        return accessToken(KisConnection.fromProperties(properties));
+    }
+
+    public String accessToken(KisConnection connection) {
+        ensureConfigured(connection);
+        String cacheKey = cacheKey(connection);
+        CachedToken token = cachedTokens.get(cacheKey);
         if (token != null && token.isUsable()) {
             return token.value();
         }
-        synchronized (this) {
-            token = cachedToken;
+        synchronized (cachedTokens) {
+            token = cachedTokens.get(cacheKey);
             if (token != null && token.isUsable()) {
                 return token.value();
             }
-            TokenResponse response = requestAccessToken();
-            cachedToken = new CachedToken(response.accessToken(), response.expiresAt());
+            TokenResponse response = requestAccessToken(connection);
+            CachedToken cachedToken = new CachedToken(response.accessToken(), response.expiresAt());
+            cachedTokens.put(cacheKey, cachedToken);
             return cachedToken.value();
         }
     }
 
     public String issueApprovalKey() {
-        ensureConfigured();
+        return issueApprovalKey(KisConnection.fromProperties(properties));
+    }
+
+    public String issueApprovalKey(KisConnection connection) {
+        ensureConfigured(connection);
         try {
-            ApprovalResponse response = restClient.post()
+            ApprovalResponse response = restClient(connection).post()
                 .uri("/oauth2/Approval")
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(Map.of(
                     "grant_type", "client_credentials",
-                    "appkey", properties.appKey(),
-                    "secretkey", properties.appSecret()
+                    "appkey", connection.appKey(),
+                    "secretkey", connection.appSecret()
                 ))
                 .retrieve()
                 .body(ApprovalResponse.class);
@@ -71,13 +78,17 @@ public class KisAuthClient {
     }
 
     public String hashKey(Map<String, ?> body) {
-        ensureConfigured();
+        return hashKey(KisConnection.fromProperties(properties), body);
+    }
+
+    public String hashKey(KisConnection connection, Map<String, ?> body) {
+        ensureConfigured(connection);
         try {
-            HashResponse response = restClient.post()
+            HashResponse response = restClient(connection).post()
                 .uri("/uapi/hashkey")
                 .contentType(MediaType.APPLICATION_JSON)
-                .header("appkey", properties.appKey())
-                .header("appsecret", properties.appSecret())
+                .header("appkey", connection.appKey())
+                .header("appsecret", connection.appSecret())
                 .body(body)
                 .retrieve()
                 .body(HashResponse.class);
@@ -90,15 +101,15 @@ public class KisAuthClient {
         }
     }
 
-    private TokenResponse requestAccessToken() {
+    private TokenResponse requestAccessToken(KisConnection connection) {
         try {
-            RawTokenResponse response = restClient.post()
+            RawTokenResponse response = restClient(connection).post()
                 .uri("/oauth2/tokenP")
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(Map.of(
                     "grant_type", "client_credentials",
-                    "appkey", properties.appKey(),
-                    "appsecret", properties.appSecret()
+                    "appkey", connection.appKey(),
+                    "appsecret", connection.appSecret()
                 ))
                 .retrieve()
                 .body(RawTokenResponse.class);
@@ -111,10 +122,20 @@ public class KisAuthClient {
         }
     }
 
-    private void ensureConfigured() {
-        if (!properties.enabled() || !properties.hasRestCredentials()) {
+    private void ensureConfigured(KisConnection connection) {
+        if (!connection.enabled() || !connection.hasRestCredentials()) {
             throw new ApiException(ErrorCode.KIS_NOT_CONFIGURED);
         }
+    }
+
+    private static RestClient restClient(KisConnection connection) {
+        return RestClient.builder()
+            .baseUrl(connection.baseUrl().toString())
+            .build();
+    }
+
+    private static String cacheKey(KisConnection connection) {
+        return connection.environment().name() + ":" + connection.appKey();
     }
 
     private static ZonedDateTime parseExpiresAt(String value) {

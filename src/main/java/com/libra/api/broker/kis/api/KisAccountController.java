@@ -2,6 +2,7 @@ package com.libra.api.broker.kis.api;
 
 import com.libra.api.broker.kis.api.dto.KisBalanceResponse;
 import com.libra.api.broker.kis.api.dto.KisBuyableCashResponse;
+import com.libra.api.broker.kis.service.KisCredentialService;
 import com.libra.api.broker.kis.service.KisAccountClient;
 import com.libra.api.auth.domain.User;
 import com.libra.api.common.error.ApiException;
@@ -30,10 +31,16 @@ import org.springframework.web.bind.annotation.RestController;
 public class KisAccountController {
 
     private final KisAccountClient accountClient;
+    private final KisCredentialService credentials;
     private final PortfolioSnapshotService snapshots;
 
-    public KisAccountController(KisAccountClient accountClient, PortfolioSnapshotService snapshots) {
+    public KisAccountController(
+        KisAccountClient accountClient,
+        KisCredentialService credentials,
+        PortfolioSnapshotService snapshots
+    ) {
         this.accountClient = accountClient;
+        this.credentials = credentials;
         this.snapshots = snapshots;
     }
 
@@ -43,17 +50,19 @@ public class KisAccountController {
         @Parameter(hidden = true) @AuthenticationPrincipal User user,
         @RequestParam(defaultValue = "true") boolean saveSnapshot
     ) {
-        KisBalanceResponse balance = accountClient.balance();
+        User principal = requireUser(user);
+        KisBalanceResponse balance = accountClient.balance(credentials.resolve(principal));
         if (!saveSnapshot) {
             return balance;
         }
-        PortfolioSnapshot snapshot = snapshots.saveKisBalance(requireUser(user), balance);
+        PortfolioSnapshot snapshot = snapshots.saveKisBalance(principal, balance);
         return balance.withSnapshotId(snapshot.getId());
     }
 
     @Operation(summary = "Get KIS buyable cash and quantity for a domestic stock")
     @GetMapping("/buyable")
     public KisBuyableCashResponse buyable(
+        @Parameter(hidden = true) @AuthenticationPrincipal User user,
         @Parameter(example = "005930")
         @RequestParam
         @Pattern(regexp = "^[A-Z0-9]{5,12}$", message = "symbol must be 5-12 uppercase alphanumeric characters")
@@ -61,7 +70,7 @@ public class KisAccountController {
         @RequestParam(defaultValue = "0") BigDecimal price,
         @RequestParam(defaultValue = "01") String orderDivision
     ) {
-        return accountClient.buyableCash(symbol, price, orderDivision);
+        return accountClient.buyableCash(symbol, price, orderDivision, credentials.resolve(requireUser(user)));
     }
 
     private static User requireUser(User user) {

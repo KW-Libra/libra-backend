@@ -18,27 +18,27 @@ public class KisMarketClient {
 
     private final KisProperties properties;
     private final KisAuthClient authClient;
-    private final RestClient restClient;
 
     public KisMarketClient(KisProperties properties, KisAuthClient authClient) {
         this.properties = properties;
         this.authClient = authClient;
-        this.restClient = RestClient.builder()
-            .baseUrl(properties.baseUrl().toString())
-            .build();
     }
 
     public KisQuoteResponse quote(String symbol, String marketCode) {
-        ensureConfigured();
+        return quote(symbol, marketCode, KisConnection.fromProperties(properties));
+    }
+
+    public KisQuoteResponse quote(String symbol, String marketCode, KisConnection connection) {
+        ensureConfigured(connection);
         String normalizedMarketCode = normalizeMarketCode(marketCode);
         try {
-            KisEnvelope response = restClient.get()
+            KisEnvelope response = restClient(connection).get()
                 .uri(uriBuilder -> uriBuilder
                     .path(INQUIRE_PRICE_PATH)
                     .queryParam("FID_COND_MRKT_DIV_CODE", normalizedMarketCode)
                     .queryParam("FID_INPUT_ISCD", symbol)
                     .build())
-                .headers(headers -> applyKisHeaders(headers, authClient.accessToken(), INQUIRE_PRICE_TR_ID))
+                .headers(headers -> applyKisHeaders(headers, authClient.accessToken(connection), INQUIRE_PRICE_TR_ID, connection))
                 .retrieve()
                 .body(KisEnvelope.class);
             if (response == null || response.output() == null) {
@@ -53,16 +53,22 @@ public class KisMarketClient {
         }
     }
 
-    private void ensureConfigured() {
-        if (!properties.enabled() || !properties.hasRestCredentials()) {
+    private static RestClient restClient(KisConnection connection) {
+        return RestClient.builder()
+            .baseUrl(connection.baseUrl().toString())
+            .build();
+    }
+
+    private void ensureConfigured(KisConnection connection) {
+        if (!connection.enabled() || !connection.hasRestCredentials()) {
             throw new ApiException(ErrorCode.KIS_NOT_CONFIGURED);
         }
     }
 
-    private void applyKisHeaders(HttpHeaders headers, String token, String trId) {
+    private void applyKisHeaders(HttpHeaders headers, String token, String trId, KisConnection connection) {
         headers.setBearerAuth(token);
-        headers.set("appkey", properties.appKey());
-        headers.set("appsecret", properties.appSecret());
+        headers.set("appkey", connection.appKey());
+        headers.set("appsecret", connection.appSecret());
         headers.set("tr_id", trId);
         headers.set("custtype", "P");
     }

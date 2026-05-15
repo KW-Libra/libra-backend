@@ -20,7 +20,8 @@ public record KisProperties(
     URI paperBaseUrl,
     long maxOrderQuantity,
     BigDecimal maxOrderAmount,
-    List<String> allowedSymbols
+    List<String> allowedSymbols,
+    String credentialEncryptionKey
 ) {
 
     public enum Environment {
@@ -68,6 +69,9 @@ public record KisProperties(
                 .distinct()
                 .toList();
         }
+        if (credentialEncryptionKey == null) {
+            credentialEncryptionKey = "";
+        }
     }
 
     public URI baseUrl() {
@@ -95,5 +99,9 @@ public record KisProperties(
             return true;
         }
         return symbol != null && allowedSymbols.contains(symbol.trim().toUpperCase(Locale.ROOT));
+    }
+
+    public boolean hasCredentialEncryptionKey() {
+        return !credentialEncryptionKey.isBlank();
     }
 }

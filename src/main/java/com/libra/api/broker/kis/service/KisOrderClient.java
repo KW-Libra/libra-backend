@@ -22,28 +22,28 @@ public class KisOrderClient {
     private final KisProperties properties;
     private final KisAuthClient authClient;
     private final KisOrderRiskGuard riskGuard;
-    private final RestClient restClient;
 
     public KisOrderClient(KisProperties properties, KisAuthClient authClient, KisOrderRiskGuard riskGuard) {
         this.properties = properties;
         this.authClient = authClient;
         this.riskGuard = riskGuard;
-        this.restClient = RestClient.builder()
-            .baseUrl(properties.baseUrl().toString())
-            .build();
     }
 
     public KisOrderResponse placeCashOrder(KisOrderRequest request) {
-        riskGuard.validate(request);
-        ensureTradingEnabled();
+        return placeCashOrder(request, KisConnection.fromProperties(properties));
+    }
 
-        Map<String, String> body = orderBody(request);
-        String trId = orderTrId(request.side());
+    public KisOrderResponse placeCashOrder(KisOrderRequest request, KisConnection connection) {
+        riskGuard.validate(request, connection);
+        ensureTradingEnabled(connection);
+
+        Map<String, String> body = orderBody(request, connection);
+        String trId = orderTrId(request.side(), connection);
         try {
-            KisOrderEnvelope response = restClient.post()
+            KisOrderEnvelope response = restClient(connection).post()
                 .uri(ORDER_CASH_PATH)
                 .contentType(MediaType.APPLICATION_JSON)
-                .headers(headers -> applyOrderHeaders(headers, authClient.accessToken(), trId, body))
+                .headers(headers -> applyOrderHeaders(headers, authClient.accessToken(connection), trId, body, connection))
                 .body(body)
                 .retrieve()
                 .body(KisOrderEnvelope.class);
@@ -54,7 +54,7 @@ public class KisOrderClient {
                 throw new ApiException(ErrorCode.KIS_UNAVAILABLE, response.message());
             }
             return KisOrderResponse.submitted(
-                properties.environment().name().toLowerCase(),
+                connection.environmentName(),
                 request,
                 response.message(),
                 response.output()
@@ -64,19 +64,25 @@ public class KisOrderClient {
         }
     }
 
-    private void ensureTradingEnabled() {
-        if (!properties.enabled() || !properties.hasRestCredentials() || !properties.hasAccount()) {
+    private static RestClient restClient(KisConnection connection) {
+        return RestClient.builder()
+            .baseUrl(connection.baseUrl().toString())
+            .build();
+    }
+
+    private void ensureTradingEnabled(KisConnection connection) {
+        if (!connection.enabled() || !connection.hasRestCredentials() || !connection.hasAccount()) {
             throw new ApiException(ErrorCode.KIS_NOT_CONFIGURED);
         }
-        if (!properties.tradingEnabled()) {
+        if (!connection.tradingEnabled()) {
             throw new ApiException(ErrorCode.KIS_TRADING_DISABLED);
         }
     }
 
-    private Map<String, String> orderBody(KisOrderRequest request) {
+    private Map<String, String> orderBody(KisOrderRequest request, KisConnection connection) {
         Map<String, String> body = new LinkedHashMap<>();
-        body.put("CANO", properties.accountNumber());
-        body.put("ACNT_PRDT_CD", properties.accountProductCode());
+        body.put("CANO", connection.accountNumber());
+        body.put("ACNT_PRDT_CD", connection.accountProductCode());
         body.put("PDNO", request.symbol());
         body.put("ORD_DVSN", request.orderDivision());
         body.put("ORD_QTY", Long.toString(request.quantity()));
@@ -87,8 +93,8 @@ public class KisOrderClient {
         return body;
     }
 
-    private String orderTrId(KisOrderSide side) {
-        boolean paper = properties.environment() == KisProperties.Environment.PAPER;
+    private String orderTrId(KisOrderSide side, KisConnection connection) {
+        boolean paper = connection.environment() == KisProperties.Environment.PAPER;
         if (side == KisOrderSide.BUY) {
             return paper ? "VTTC0012U" : "TTTC0012U";
         }
@@ -99,14 +105,15 @@ public class KisOrderClient {
         HttpHeaders headers,
         String token,
         String trId,
-        Map<String, String> body
+        Map<String, String> body,
+        KisConnection connection
     ) {
         headers.setBearerAuth(token);
-        headers.set("appkey", properties.appKey());
-        headers.set("appsecret", properties.appSecret());
+        headers.set("appkey", connection.appKey());
+        headers.set("appsecret", connection.appSecret());
         headers.set("tr_id", trId);
         headers.set("custtype", "P");
-        headers.set("hashkey", authClient.hashKey(body));
+        headers.set("hashkey", authClient.hashKey(connection, body));
     }
 
     private record KisOrderEnvelope(

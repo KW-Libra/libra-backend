@@ -42,11 +42,16 @@ public class KisOrderAuditService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public KisOrderAudit recordRequested(User user, KisOrderRequest request, String idempotencyKey) {
+    public KisOrderAudit recordRequested(
+        User user,
+        KisOrderRequest request,
+        String idempotencyKey,
+        KisConnection connection
+    ) {
         KisOrderAudit audit = KisOrderAudit.requested(
             user.getId(),
-            properties.environment().name().toLowerCase(),
-            properties.tradingEnabled(),
+            connection.environmentName(),
+            connection.tradingEnabled(),
             request,
             toJson(request),
             idempotencyKey,

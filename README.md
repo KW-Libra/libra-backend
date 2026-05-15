@@ -55,6 +55,9 @@ Swagger UI:
 | GET | `/api/market/kis/symbols/{symbol}` | bearer | 현재가 메타데이터 기반 종목 코드 확인 |
 | GET | `/api/broker/kis/account/balance` | bearer | KIS 국내주식 계좌 잔고/보유종목 조회 + 기본 portfolio snapshot 저장. `saveSnapshot=false` 로 저장 생략 |
 | GET | `/api/broker/kis/account/buyable` | bearer | KIS 종목별 매수가능 금액/수량 조회. `symbol`, `price`, `orderDivision` |
+| GET | `/api/broker/kis/credentials` | bearer | 내 KIS API 키 등록 상태. 키 원문은 반환하지 않음 |
+| PUT | `/api/broker/kis/credentials` | bearer | 내 KIS API 키 등록/교체. App Key/Secret은 암호화 저장 |
+| DELETE | `/api/broker/kis/credentials` | bearer | 내 KIS API 키 삭제 |
 | POST | `/api/broker/kis/orders/cash` | bearer | KIS 국내주식 현금주문. 모의투자는 KIS `paper` 환경을 사용하며, 주문 전송은 `KIS_TRADING_ENABLED=true` 필요. 재시도 중복 방지는 `Idempotency-Key` 헤더 사용 |
 | GET | `/api/broker/kis/orders/audits` | bearer | 내 KIS 주문 audit log 최근 목록 |
 | GET | `/api/broker/kis/orders/audits/{id}` | bearer | 내 KIS 주문 audit log 단건 조회 |
@@ -76,6 +79,7 @@ Swagger UI:
 | CORS | `config/CorsConfig` (allowed-origins 는 `libra.cors.allowed-origins` 설정) |
 | JWT 필터 | `auth/security/JwtAuthFilter` — `Authorization: Bearer` *또는* `?token=` (SSE 호환) |
 | Agent relay | `agent/AgentSseClient` — backend JWT 인증 후 agent SSE 를 Vue 로 중계 |
+| KIS credentials | `broker/kis/domain/KisCredential` — 사용자별 KIS App Key/Secret 암호화 저장. `KIS_CREDENTIAL_ENCRYPTION_KEY` 필요 |
 | KIS broker | `broker/kis` — 한국투자증권 시세/계좌/주문 경계. agent 에 broker key 를 주지 않음 |
 | KIS order guard | `broker/kis/service/KisOrderRiskGuard` — 최대 수량/금액, 주문구분, 거래소, 허용종목 가드. `KIS_MAX_ORDER_QUANTITY`, `KIS_MAX_ORDER_AMOUNT`, `KIS_ALLOWED_SYMBOLS` 로 조정 |
 | Portfolio snapshots | `portfolio` — KIS 잔고 조회 시점의 holdings/summary 를 backend DB에 저장. agent 입력/감사 근거로 사용 |
@@ -89,6 +93,8 @@ Swagger UI:
 
 ## KIS 주문 안전장치
 - 앱 레벨 dry-run은 없다. 모의투자는 KIS `paper` 환경으로만 처리한다.
+- KIS App Key/Secret은 Libra 계정별로 등록한다. 서버 env 키는 내부 fallback 용도이고 사용자 credential이 우선이다.
+- credential 암호화 키는 운영에서 반드시 `KIS_CREDENTIAL_ENCRYPTION_KEY`로 지정한다.
 - 기본 한도: `KIS_MAX_ORDER_QUANTITY=1000`, `KIS_MAX_ORDER_AMOUNT=10000000`
 - `KIS_ALLOWED_SYMBOLS=005930,000660` 처럼 지정하면 해당 종목만 주문 가능하다. 비워두면 종목 제한은 없다.
 - 지원 주문구분은 우선 `00` 지정가, `01` 시장가만 허용한다.
