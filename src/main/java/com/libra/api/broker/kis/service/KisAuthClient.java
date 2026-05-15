@@ -13,6 +13,7 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 
 @Component
 public class KisAuthClient {
@@ -72,8 +73,14 @@ public class KisAuthClient {
                 throw new ApiException(ErrorCode.KIS_UNAVAILABLE, "KIS approval key response is empty");
             }
             return response.approvalKey();
+        } catch (RestClientResponseException e) {
+            throw new ApiException(
+                ErrorCode.KIS_UNAVAILABLE,
+                "KIS approval key request failed: " + summarizeKisError(e),
+                e
+            );
         } catch (RestClientException e) {
-            throw new ApiException(ErrorCode.KIS_UNAVAILABLE, "KIS approval key request failed");
+            throw new ApiException(ErrorCode.KIS_UNAVAILABLE, "KIS approval key request failed", e);
         }
     }
 
@@ -96,8 +103,14 @@ public class KisAuthClient {
                 throw new ApiException(ErrorCode.KIS_UNAVAILABLE, "KIS hashkey response is empty");
             }
             return response.hash();
+        } catch (RestClientResponseException e) {
+            throw new ApiException(
+                ErrorCode.KIS_UNAVAILABLE,
+                "KIS hashkey request failed: " + summarizeKisError(e),
+                e
+            );
         } catch (RestClientException e) {
-            throw new ApiException(ErrorCode.KIS_UNAVAILABLE, "KIS hashkey request failed");
+            throw new ApiException(ErrorCode.KIS_UNAVAILABLE, "KIS hashkey request failed", e);
         }
     }
 
@@ -117,8 +130,14 @@ public class KisAuthClient {
                 throw new ApiException(ErrorCode.KIS_UNAVAILABLE, "KIS access token response is empty");
             }
             return new TokenResponse(response.accessToken(), parseExpiresAt(response.expiresAt()));
+        } catch (RestClientResponseException e) {
+            throw new ApiException(
+                ErrorCode.KIS_UNAVAILABLE,
+                "KIS access token request failed: " + summarizeKisError(e),
+                e
+            );
         } catch (RestClientException e) {
-            throw new ApiException(ErrorCode.KIS_UNAVAILABLE, "KIS access token request failed");
+            throw new ApiException(ErrorCode.KIS_UNAVAILABLE, "KIS access token request failed", e);
         }
     }
 
@@ -136,6 +155,29 @@ public class KisAuthClient {
 
     private static String cacheKey(KisConnection connection) {
         return connection.environment().name() + ":" + connection.appKey();
+    }
+
+    private static String summarizeKisError(RestClientResponseException e) {
+        String body = sanitizeKisErrorBody(e.getResponseBodyAsString());
+        String status = "HTTP " + e.getStatusCode().value();
+        if (body.isBlank()) {
+            return status;
+        }
+        return status + " body=" + body;
+    }
+
+    private static String sanitizeKisErrorBody(String body) {
+        if (body == null) {
+            return "";
+        }
+        String sanitized = body
+            .replaceAll("(?i)\"(access_token|appkey|appsecret|secretkey|approval_key)\"\\s*:\\s*\"[^\"]*\"", "\"$1\":\"***\"")
+            .replaceAll("\\s+", " ")
+            .trim();
+        if (sanitized.length() > 500) {
+            return sanitized.substring(0, 500) + "...";
+        }
+        return sanitized;
     }
 
     private static ZonedDateTime parseExpiresAt(String value) {
