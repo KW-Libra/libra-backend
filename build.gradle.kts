@@ -43,6 +43,9 @@ dependencies {
     // 구조화 로깅 (JSON)
     implementation("net.logstash.logback:logstash-logback-encoder:8.0")
 
+    // AWS storage
+    implementation("software.amazon.awssdk:s3:2.29.52")
+
     // Dev / Test
     developmentOnly("org.springframework.boot:spring-boot-devtools")
     developmentOnly("com.h2database:h2")
