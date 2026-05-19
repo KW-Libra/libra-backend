@@ -50,6 +50,7 @@ Swagger UI:
 | GET | `/api/auth/me` | bearer | 현재 사용자 |
 | POST | `/api/runs` | bearer | agent 실행 시작 + SSE relay. `approval_required=true` 이면 HITL interrupt 흐름 |
 | POST | `/api/runs/{threadId}/resume` | bearer | agent 실행 재개 + SSE relay |
+| GET | `/api/backtests/public-rss-3y/validation` | public | S3에 저장된 3년 public RSS 백테스트 검증 요약. 프론트에는 raw artifact를 배포하지 않음 |
 | GET | `/api/market/kis/status` | bearer | KIS 연동 설정 상태. 키 값은 노출하지 않음 |
 | GET | `/api/market/kis/quotes/{symbol}` | bearer | KIS 국내주식 현재가 조회. 예: `005930` |
 | GET | `/api/market/kis/symbols/{symbol}` | bearer | 현재가 메타데이터 기반 종목 코드 확인 |
@@ -79,6 +80,7 @@ Swagger UI:
 | CORS | `config/CorsConfig` (allowed-origins 는 `libra.cors.allowed-origins` 설정) |
 | JWT 필터 | `auth/security/JwtAuthFilter` — `Authorization: Bearer` *또는* `?token=` (SSE 호환) |
 | Agent relay | `agent/AgentSseClient` — backend JWT 인증 후 agent SSE 를 Vue 로 중계 |
+| Backtest reports | `backtest` — private S3의 검증 리포트를 읽어 public API로 제공. 기본 URI는 `LIBRA_BACKTEST_PUBLIC_RSS_3Y_VALIDATION_URI` |
 | KIS credentials | `broker/kis/domain/KisCredential` — 사용자별 KIS App Key/Secret 암호화 저장. `KIS_CREDENTIAL_ENCRYPTION_KEY` 필요 |
 | KIS broker | `broker/kis` — 한국투자증권 시세/계좌/주문 경계. agent 에 broker key 를 주지 않음 |
 | KIS order guard | `broker/kis/service/KisOrderRiskGuard` — 최대 수량/금액, 주문구분, 거래소, 허용종목 가드. `KIS_MAX_ORDER_QUANTITY`, `KIS_MAX_ORDER_AMOUNT`, `KIS_ALLOWED_SYMBOLS` 로 조정 |
