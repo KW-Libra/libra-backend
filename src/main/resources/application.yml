@@ -78,7 +78,7 @@ libra:
   ingest:
     workspace-root: ${LIBRA_INGEST_WORKSPACE_ROOT:/opt/libra/ingest/app}
     output-root: ${LIBRA_LIVE_INGEST_OUTPUT_ROOT:/opt/libra/backend/live-ingest}
-    python-command: ${LIBRA_PYTHON_COMMAND:python}
+    python-command: ${LIBRA_PYTHON_COMMAND:/opt/libra/ingest/.venv/bin/python}
     rss-limit: ${LIBRA_LIVE_INGEST_RSS_LIMIT:20}
     dart-limit: ${LIBRA_LIVE_INGEST_DART_LIMIT:100}
     report-limit: ${LIBRA_LIVE_INGEST_REPORT_LIMIT:20}

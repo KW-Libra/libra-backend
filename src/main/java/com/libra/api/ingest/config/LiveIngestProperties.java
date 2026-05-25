@@ -25,7 +25,7 @@ public record LiveIngestProperties(
             outputRoot = Path.of("/opt/libra/backend/live-ingest");
         }
         if (pythonCommand == null || pythonCommand.isBlank()) {
-            pythonCommand = "python";
+            pythonCommand = "/opt/libra/ingest/.venv/bin/python";
         }
         if (rssLimit <= 0) {
             rssLimit = 20;
