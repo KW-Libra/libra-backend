@@ -70,14 +70,14 @@ libra:
     connect-timeout: ${AGENT_CONNECT_TIMEOUT:5s}
     stream-timeout: ${AGENT_STREAM_TIMEOUT:30m}
   backtests:
-    output-root: ${LIBRA_BACKTEST_OUTPUT_ROOT:../Libra/outputs/backtests}
+    output-root: ${LIBRA_BACKTEST_OUTPUT_ROOT:/opt/libra/backtests}
     public-rss-3y:
       validation-report-uri: ${LIBRA_BACKTEST_PUBLIC_RSS_3Y_VALIDATION_URI:s3://libra-backtests-271030592697-ap-northeast-2/backtests/public-rss-3y/validation.json}
       s3-region: ${LIBRA_BACKTEST_S3_REGION:${AWS_REGION:ap-northeast-2}}
       cache-ttl: ${LIBRA_BACKTEST_PUBLIC_RSS_3Y_CACHE_TTL:5m}
   ingest:
-    workspace-root: ${LIBRA_INGEST_WORKSPACE_ROOT:../libra-ingest}
-    output-root: ${LIBRA_LIVE_INGEST_OUTPUT_ROOT:../libra-ingest/outputs/service-live}
+    workspace-root: ${LIBRA_INGEST_WORKSPACE_ROOT:/opt/libra/ingest/app}
+    output-root: ${LIBRA_LIVE_INGEST_OUTPUT_ROOT:/opt/libra/backend/live-ingest}
     python-command: ${LIBRA_PYTHON_COMMAND:python}
     rss-limit: ${LIBRA_LIVE_INGEST_RSS_LIMIT:20}
     dart-limit: ${LIBRA_LIVE_INGEST_DART_LIMIT:100}

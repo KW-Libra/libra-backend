@@ -19,10 +19,10 @@ public record LiveIngestProperties(
 
     public LiveIngestProperties {
         if (workspaceRoot == null) {
-            workspaceRoot = Path.of("../libra-ingest");
+            workspaceRoot = Path.of("/opt/libra/ingest/app");
         }
         if (outputRoot == null) {
-            outputRoot = Path.of("../libra-ingest/outputs/service-live");
+            outputRoot = Path.of("/opt/libra/backend/live-ingest");
         }
         if (pythonCommand == null || pythonCommand.isBlank()) {
             pythonCommand = "python";

@@ -8,7 +8,7 @@ public record BacktestProperties(Path outputRoot) {
 
     public BacktestProperties {
         if (outputRoot == null) {
-            outputRoot = Path.of("../Libra/outputs/backtests");
+            outputRoot = Path.of("/opt/libra/backtests");
         }
     }
 }
