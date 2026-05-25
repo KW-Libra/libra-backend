@@ -8,6 +8,7 @@ import com.libra.api.common.correlation.CorrelationIdFilter;
 import com.libra.api.common.error.ApiException;
 import com.libra.api.common.error.ErrorCode;
 import com.libra.api.config.OpenApiConfig;
+import com.libra.api.ingest.service.LiveIngestService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -30,16 +31,20 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 public class RunController {
 
     private final AgentSseClient agent;
+    private final LiveIngestService ingest;
 
-    public RunController(AgentSseClient agent) {
+    public RunController(AgentSseClient agent, LiveIngestService ingest) {
         this.agent = agent;
+        this.ingest = ingest;
     }
 
     @Operation(summary = "Start an agent run and stream events")
     @PostMapping(produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter startRun(@RequestBody @Valid RunStartRequest req,
                                @Parameter(hidden = true) @AuthenticationPrincipal User user) {
-        return agent.startRun(req, requireUser(user), traceId());
+        User principal = requireUser(user);
+        String traceId = traceId();
+        return agent.startRun(ingest.prepare(req, principal, traceId), principal, traceId);
     }
 
     @Operation(summary = "Resume a paused agent run and stream events")

@@ -17,6 +17,8 @@ public record RunStartRequest(
 
     Map<String, Object> knowledge_base,
 
+    Map<String, Object> ingest_bundle,
+
     Map<String, Object> knowledge_sources,
 
     Map<String, Object> portfolio_definition,
@@ -51,6 +53,25 @@ public record RunStartRequest(
         if (enable_human_interrupts == null) {
             enable_human_interrupts = approval_required;
         }
+    }
+
+    public RunStartRequest withIngestBundle(Map<String, Object> ingestBundle) {
+        return new RunStartRequest(
+            query,
+            portfolio,
+            null,
+            ingestBundle,
+            knowledge_sources,
+            portfolio_definition,
+            trigger_event,
+            governance_v1,
+            trigger,
+            depth,
+            deadline_seconds,
+            thread_id,
+            approval_required,
+            enable_human_interrupts
+        );
     }
 
     private static String normalizeTrigger(String value) {

@@ -48,7 +48,7 @@ Swagger UI:
 | POST | `/api/auth/signup` | public | `{email, password, displayName?}` |
 | POST | `/api/auth/login` | public | `{email, password}` → JWT |
 | GET | `/api/auth/me` | bearer | 현재 사용자 |
-| POST | `/api/runs` | bearer | agent 실행 시작 + SSE relay. `approval_required=true` 이면 HITL interrupt 흐름 |
+| POST | `/api/runs` | bearer | live ingest bundle 생성 후 agent 실행 시작 + SSE relay. `approval_required=true` 이면 HITL interrupt 흐름 |
 | POST | `/api/runs/{threadId}/resume` | bearer | agent 실행 재개 + SSE relay |
 | GET | `/api/backtests/public-rss-3y/validation` | public | S3에 저장된 3년 public RSS 백테스트 검증 요약. 프론트에는 raw artifact를 배포하지 않음 |
 | GET | `/api/market/kis/status` | bearer | KIS 연동 설정 상태. 키 값은 노출하지 않음 |
@@ -65,6 +65,7 @@ Swagger UI:
 | GET | `/api/portfolio/snapshots` | bearer | 내 portfolio snapshot 최근 목록 |
 | GET | `/api/portfolio/snapshots/latest` | bearer | 내 최신 portfolio snapshot 상세 |
 | GET | `/api/portfolio/snapshots/{id}` | bearer | 내 portfolio snapshot 단건 상세 |
+| GET | `/api/backtests/{experimentId}/validation` | bearer | 실제 validation artifact(JSON/CSV)를 읽어 LIBRA-v3 검증 결과 제공. 기본 root는 `LIBRA_BACKTEST_OUTPUT_ROOT` |
 | GET | `/api/docs` | public | Swagger UI |
 | GET | `/api/openapi` | public | OpenAPI JSON |
 
@@ -81,6 +82,7 @@ Swagger UI:
 | JWT 필터 | `auth/security/JwtAuthFilter` — `Authorization: Bearer` *또는* `?token=` (SSE 호환) |
 | Agent relay | `agent/AgentSseClient` — backend JWT 인증 후 agent SSE 를 Vue 로 중계 |
 | Backtest reports | `backtest` — private S3의 검증 리포트를 읽어 public API로 제공. 기본 URI는 `LIBRA_BACKTEST_PUBLIC_RSS_3Y_VALIDATION_URI` |
+| Live ingest | `ingest/LiveIngestService` — run 시작 전 `D:\libra-ingest` live pipeline을 `--require-article-body`로 실행하고, 결과를 백테스트 replay와 같은 `ingest_bundle` 계약으로 agent에 전달 |
 | KIS credentials | `broker/kis/domain/KisCredential` — 사용자별 KIS App Key/Secret 암호화 저장. `KIS_CREDENTIAL_ENCRYPTION_KEY` 필요 |
 | KIS broker | `broker/kis` — 한국투자증권 시세/계좌/주문 경계. agent 에 broker key 를 주지 않음 |
 | KIS order guard | `broker/kis/service/KisOrderRiskGuard` — 최대 수량/금액, 주문구분, 거래소, 허용종목 가드. `KIS_MAX_ORDER_QUANTITY`, `KIS_MAX_ORDER_AMOUNT`, `KIS_ALLOWED_SYMBOLS` 로 조정 |

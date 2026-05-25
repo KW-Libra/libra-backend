@@ -19,6 +19,19 @@ class RunStartRequestSerializationTests {
               "depth": "shallow",
               "deadline_seconds": 180,
               "approval_required": true,
+              "ingest_bundle": {
+                "bundle_id": "live-bundle",
+                "as_of": "2026-05-25T15:30:00+09:00",
+                "portfolio_id": "web-run",
+                "source_policy": "KIS price + OpenDART + Google News RSS article-body ingest",
+                "prices_until": "2026-05-25",
+                "observed_count": 0,
+                "portfolio_relevant_count": 0,
+                "usable_for_trade_decision": true,
+                "items": [],
+                "document_count": 0,
+                "documents": []
+              },
               "knowledge_base": { "events": [] }
             }
             """,
@@ -32,6 +45,7 @@ class RunStartRequestSerializationTests {
         assertThat(json).contains("\"deadline_seconds\":180");
         assertThat(json).contains("\"approval_required\"");
         assertThat(json).contains("\"enable_human_interrupts\":true");
+        assertThat(json).contains("\"ingest_bundle\"");
         assertThat(json).contains("\"knowledge_base\"");
     }
 
