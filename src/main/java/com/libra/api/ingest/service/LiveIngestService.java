@@ -107,6 +107,7 @@ public class LiveIngestService {
                 enrichedHoldings.add(holding);
                 continue;
             }
+            List<Map<String, Object>> rowsForLiquidity;
             if (!hasUsableOhlcv(holding)) {
                 List<Map<String, Object>> ohlcv = marketClient.dailyOhlcv(
                     ticker,
@@ -126,7 +127,11 @@ public class LiveIngestService {
                 List<Map<String, Object>> trimmed = tailRows(ohlcv, PRICE_HISTORY_LOOKBACK_TRADING_DAYS);
                 holding.put("ohlcv", trimmed);
                 holding.put("daily_returns", dailyReturns(trimmed));
+                rowsForLiquidity = trimmed;
+            } else {
+                rowsForLiquidity = ohlcvRows(holding.get("ohlcv"));
             }
+            putLiquidityMetrics(holding, rowsForLiquidity);
             enrichedHoldings.add(holding);
         }
 
@@ -259,6 +264,68 @@ public class LiveIngestService {
         return new ArrayList<>(rows.subList(rows.size() - maxRows, rows.size()));
     }
 
+    private static List<Map<String, Object>> ohlcvRows(Object rawRows) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        if (!(rawRows instanceof List<?> list)) {
+            return rows;
+        }
+        for (Object item : list) {
+            if (item instanceof Map<?, ?> map) {
+                rows.add(copyStringKeyMap(map));
+            }
+        }
+        return rows;
+    }
+
+    private static void putLiquidityMetrics(Map<String, Object> holding, List<Map<String, Object>> rows) {
+        if (rows.isEmpty()) {
+            return;
+        }
+        Double averageVolume = averageVolume(rows, 20);
+        Double averageTurnover = averageTurnoverKrw(rows, 20);
+        if (averageVolume != null && !hasNumeric(holding, "avg_daily_volume")) {
+            holding.put("avg_daily_volume", averageVolume);
+        }
+        if (averageTurnover != null) {
+            if (!hasNumeric(holding, "avg_daily_turnover_krw")) {
+                holding.put("avg_daily_turnover_krw", averageTurnover);
+            }
+            if (!hasNumeric(holding, "adv_krw")) {
+                holding.put("adv_krw", averageTurnover);
+            }
+        }
+    }
+
+    private static Double averageVolume(List<Map<String, Object>> rows, int lookback) {
+        double total = 0.0;
+        int count = 0;
+        int start = Math.max(0, rows.size() - lookback);
+        for (int i = start; i < rows.size(); i++) {
+            Double volume = toDouble(rows.get(i).get("volume"));
+            if (volume != null && volume > 0) {
+                total += volume;
+                count++;
+            }
+        }
+        return count == 0 ? null : total / count;
+    }
+
+    private static Double averageTurnoverKrw(List<Map<String, Object>> rows, int lookback) {
+        double total = 0.0;
+        int count = 0;
+        int start = Math.max(0, rows.size() - lookback);
+        for (int i = start; i < rows.size(); i++) {
+            Map<String, Object> row = rows.get(i);
+            Double close = toDouble(row.get("close"));
+            Double volume = toDouble(row.get("volume"));
+            if (close != null && close > 0 && volume != null && volume > 0) {
+                total += close * volume;
+                count++;
+            }
+        }
+        return count == 0 ? null : total / count;
+    }
+
     private static List<Double> dailyReturns(List<Map<String, Object>> rows) {
         List<Double> returns = new ArrayList<>();
         Double previousClose = null;
@@ -284,6 +351,11 @@ public class LiveIngestService {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    private static boolean hasNumeric(Map<String, Object> source, String key) {
+        Double value = toDouble(source.get(key));
+        return value != null && value > 0;
     }
 
     private static String sanitize(String value) {
