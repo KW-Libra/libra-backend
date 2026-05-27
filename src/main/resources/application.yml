@@ -71,6 +71,16 @@ libra:
     stream-timeout: ${AGENT_STREAM_TIMEOUT:30m}
   backtests:
     output-root: ${LIBRA_BACKTEST_OUTPUT_ROOT:/opt/libra/backtests}
+    runner:
+      enabled: ${LIBRA_BACKTEST_RUNNER_ENABLED:true}
+      agent-repo-root: '${LIBRA_AGENT_REPO_ROOT:D:\libra-agent}'
+      output-dir: '${LIBRA_BACKTEST_RUNNER_OUTPUT_DIR:D:\Libra\outputs\backtests\kr-objective-2020-2023-opendart-googlenews}'
+      env-file: '${LIBRA_BACKTEST_RUNNER_ENV_FILE:D:\libra-agent\.env.live.local}'
+      powershell-command: ${LIBRA_BACKTEST_RUNNER_POWERSHELL:powershell}
+      default-model: ${LIBRA_BACKTEST_RUNNER_MODEL:claude-haiku-4-5-20251001}
+      default-governance-preset: ${LIBRA_BACKTEST_RUNNER_GOVERNANCE_PRESET:aggressive}
+      default-execution-policy-mode: ${LIBRA_BACKTEST_RUNNER_EXECUTION_POLICY_MODE:RISK_TRIM_AND_REDISTRIBUTE}
+      status-tail-lines: ${LIBRA_BACKTEST_RUNNER_STATUS_TAIL_LINES:20}
     public-rss-3y:
       validation-report-uri: ${LIBRA_BACKTEST_PUBLIC_RSS_3Y_VALIDATION_URI:s3://libra-backtests-271030592697-ap-northeast-2/backtests/public-rss-3y/validation.json}
       s3-region: ${LIBRA_BACKTEST_S3_REGION:${AWS_REGION:ap-northeast-2}}

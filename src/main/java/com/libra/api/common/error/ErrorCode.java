@@ -22,6 +22,12 @@ public enum ErrorCode {
     AGENT_UNAVAILABLE(HttpStatus.BAD_GATEWAY, "에이전트 서비스에 접근할 수 없습니다"),
     AGENT_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "에이전트 응답이 지연됩니다"),
 
+    // Backtest runner
+    BACKTEST_RUNNER_DISABLED(HttpStatus.SERVICE_UNAVAILABLE, "백테스트 실행 기능이 비활성화되어 있습니다"),
+    BACKTEST_RUNNER_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE, "백테스트 실행 환경 설정이 필요합니다"),
+    BACKTEST_RUNNER_CONFLICT(HttpStatus.CONFLICT, "같은 백테스트 실행이 이미 진행 중입니다"),
+    BACKTEST_RUNNER_FAILED(HttpStatus.BAD_GATEWAY, "백테스트 실행 요청을 처리할 수 없습니다"),
+
     // Broker / market data
     KIS_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE, "한국투자증권 API 설정이 필요합니다"),
     KIS_CREDENTIAL_NOT_REGISTERED(HttpStatus.BAD_REQUEST, "한국투자증권 API 키 등록이 필요합니다"),
