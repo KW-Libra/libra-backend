@@ -74,6 +74,28 @@ public record RunStartRequest(
         );
     }
 
+    public RunStartRequest withPortfolioAndIngestBundle(
+        Map<String, Object> nextPortfolio,
+        Map<String, Object> ingestBundle
+    ) {
+        return new RunStartRequest(
+            query,
+            nextPortfolio,
+            null,
+            ingestBundle,
+            knowledge_sources,
+            portfolio_definition,
+            trigger_event,
+            governance_v1,
+            trigger,
+            depth,
+            deadline_seconds,
+            thread_id,
+            approval_required,
+            enable_human_interrupts
+        );
+    }
+
     private static String normalizeTrigger(String value) {
         if (value == null || value.isBlank()) {
             return "pull";

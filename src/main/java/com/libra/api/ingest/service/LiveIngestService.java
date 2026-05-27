@@ -2,6 +2,9 @@ package com.libra.api.ingest.service;
 
 import com.libra.api.agent.api.dto.RunStartRequest;
 import com.libra.api.auth.domain.User;
+import com.libra.api.broker.kis.service.KisConnection;
+import com.libra.api.broker.kis.service.KisCredentialService;
+import com.libra.api.broker.kis.service.KisMarketClient;
 import com.libra.api.common.error.ApiException;
 import com.libra.api.common.error.ErrorCode;
 import com.libra.api.ingest.config.LiveIngestProperties;
@@ -24,12 +27,24 @@ import tools.jackson.databind.ObjectMapper;
 @Service
 public class LiveIngestService {
 
+    private static final int PRICE_HISTORY_LOOKBACK_TRADING_DAYS = 120;
+    private static final int PRICE_HISTORY_QUERY_CALENDAR_DAYS = 220;
+
     private final LiveIngestProperties props;
     private final ObjectMapper objectMapper;
+    private final KisCredentialService credentials;
+    private final KisMarketClient marketClient;
 
-    public LiveIngestService(LiveIngestProperties props, ObjectMapper objectMapper) {
+    public LiveIngestService(
+        LiveIngestProperties props,
+        ObjectMapper objectMapper,
+        KisCredentialService credentials,
+        KisMarketClient marketClient
+    ) {
         this.props = props;
         this.objectMapper = objectMapper;
+        this.credentials = credentials;
+        this.marketClient = marketClient;
     }
 
     public RunStartRequest prepare(RunStartRequest req, User user, String traceId) {
@@ -42,6 +57,7 @@ public class LiveIngestService {
                 "실서비스 run에는 holdings가 포함된 portfolio가 필요합니다. 잔고 동기화 후 다시 실행하세요."
             );
         }
+        Map<String, Object> portfolio = enrichPortfolioPriceHistory(req.portfolio(), user);
 
         Path ingestRoot = props.workspaceRoot().toAbsolutePath().normalize();
         if (!Files.isDirectory(ingestRoot.resolve("src").resolve("libra_ingest"))) {
@@ -57,16 +73,65 @@ public class LiveIngestService {
 
         try {
             Files.createDirectories(runDir);
-            Files.writeString(portfolioPath, objectMapper.writeValueAsString(req.portfolio()), StandardCharsets.UTF_8);
+            Files.writeString(portfolioPath, objectMapper.writeValueAsString(portfolio), StandardCharsets.UTF_8);
             runBuilder(runDir, logPath);
             Map<String, Object> bundle = buildBundle(runDir, user, safeTraceId);
             Files.writeString(bundlePath, objectMapper.writeValueAsString(bundle), StandardCharsets.UTF_8);
-            return req.withIngestBundle(bundle);
+            return req.withPortfolioAndIngestBundle(portfolio, bundle);
         } catch (ApiException e) {
             throw e;
         } catch (Exception e) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "실서비스 ingest bundle 생성에 실패했습니다", e);
         }
+    }
+
+    private Map<String, Object> enrichPortfolioPriceHistory(Map<String, Object> source, User user) {
+        Map<String, Object> enriched = new LinkedHashMap<>(source);
+        Object rawHoldings = source.get("holdings");
+        if (!(rawHoldings instanceof List<?> holdings)) {
+            return enriched;
+        }
+
+        KisConnection connection = credentials.resolve(user);
+        LocalDate endDate = LocalDate.now(ZoneId.of("Asia/Seoul"));
+        LocalDate startDate = endDate.minusDays(PRICE_HISTORY_QUERY_CALENDAR_DAYS);
+        List<Map<String, Object>> enrichedHoldings = new ArrayList<>();
+
+        for (Object item : holdings) {
+            if (!(item instanceof Map<?, ?> holdingMap)) {
+                continue;
+            }
+            Map<String, Object> holding = copyStringKeyMap(holdingMap);
+            String ticker = firstNonBlank(holding, "ticker", "symbol");
+            if (ticker.isBlank()) {
+                enrichedHoldings.add(holding);
+                continue;
+            }
+            if (!hasUsableOhlcv(holding)) {
+                List<Map<String, Object>> ohlcv = marketClient.dailyOhlcv(
+                    ticker,
+                    firstNonBlank(holding, "market_code", "marketCode").isBlank()
+                        ? "J"
+                        : firstNonBlank(holding, "market_code", "marketCode"),
+                    startDate,
+                    endDate,
+                    connection
+                );
+                if (ohlcv.isEmpty()) {
+                    throw new ApiException(
+                        ErrorCode.VALIDATION_FAILED,
+                        "KIS 가격 히스토리가 비어 있습니다: " + ticker
+                    );
+                }
+                List<Map<String, Object>> trimmed = tailRows(ohlcv, PRICE_HISTORY_LOOKBACK_TRADING_DAYS);
+                holding.put("ohlcv", trimmed);
+                holding.put("daily_returns", dailyReturns(trimmed));
+            }
+            enrichedHoldings.add(holding);
+        }
+
+        enriched.put("holdings", enrichedHoldings);
+        return enriched;
     }
 
     private void runBuilder(
@@ -160,6 +225,65 @@ public class LiveIngestService {
         }
         Object holdings = portfolio.get("holdings");
         return holdings instanceof List<?> list && !list.isEmpty();
+    }
+
+    private static Map<String, Object> copyStringKeyMap(Map<?, ?> source) {
+        Map<String, Object> copy = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : source.entrySet()) {
+            if (entry.getKey() != null) {
+                copy.put(entry.getKey().toString(), entry.getValue());
+            }
+        }
+        return copy;
+    }
+
+    private static boolean hasUsableOhlcv(Map<String, Object> holding) {
+        Object rows = holding.get("ohlcv");
+        return rows instanceof List<?> list && !list.isEmpty();
+    }
+
+    private static String firstNonBlank(Map<String, Object> source, String... keys) {
+        for (String key : keys) {
+            Object value = source.get(key);
+            if (value != null && !value.toString().isBlank()) {
+                return value.toString().trim();
+            }
+        }
+        return "";
+    }
+
+    private static List<Map<String, Object>> tailRows(List<Map<String, Object>> rows, int maxRows) {
+        if (rows.size() <= maxRows) {
+            return rows;
+        }
+        return new ArrayList<>(rows.subList(rows.size() - maxRows, rows.size()));
+    }
+
+    private static List<Double> dailyReturns(List<Map<String, Object>> rows) {
+        List<Double> returns = new ArrayList<>();
+        Double previousClose = null;
+        for (Map<String, Object> row : rows) {
+            Double close = toDouble(row.get("close"));
+            if (close == null || close <= 0) {
+                continue;
+            }
+            if (previousClose != null && previousClose > 0) {
+                returns.add(close / previousClose - 1.0);
+            }
+            previousClose = close;
+        }
+        return returns;
+    }
+
+    private static Double toDouble(Object value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Double.parseDouble(value.toString().replace(",", "").trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     private static String sanitize(String value) {
