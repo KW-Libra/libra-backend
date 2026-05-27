@@ -9,7 +9,7 @@ public record BacktestRunnerProperties(
     Path agentRepoRoot,
     Path outputDir,
     Path envFile,
-    String powershellCommand,
+    String pythonCommand,
     String defaultModel,
     String defaultGovernancePreset,
     String defaultExecutionPolicyMode,
@@ -26,8 +26,8 @@ public record BacktestRunnerProperties(
         if (envFile == null) {
             envFile = agentRepoRoot.resolve(".env.live.local");
         }
-        if (powershellCommand == null || powershellCommand.isBlank()) {
-            powershellCommand = "powershell";
+        if (pythonCommand != null && pythonCommand.isBlank()) {
+            pythonCommand = null;
         }
         if (defaultModel == null || defaultModel.isBlank()) {
             defaultModel = "claude-haiku-4-5-20251001";

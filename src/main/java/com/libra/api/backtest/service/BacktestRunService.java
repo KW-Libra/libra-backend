@@ -23,7 +23,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 
@@ -47,9 +46,11 @@ public class BacktestRunService {
         validateRequest(request);
 
         Path agentRoot = properties.agentRepoRoot().normalize();
-        Path script = agentRoot.resolve("scripts").resolve("start-claude-committee-full-replay.ps1").normalize();
+        Path script = agentRoot.resolve("scripts").resolve("replay_full_committee_backtest.py").normalize();
         Path outputDir = properties.outputDir().normalize();
         Path envFile = properties.envFile().normalize();
+        Path bundlesDir = outputDir.resolve("ingest-bundles-article").normalize();
+        Path fixture = outputDir.resolve("comparison-fixture.json").normalize();
         String model = valueOrDefault(request.model(), properties.defaultModel());
         String governancePreset = valueOrDefault(request.governancePreset(), properties.defaultGovernancePreset());
         String executionPolicyMode = valueOrDefault(request.executionPolicyMode(), properties.defaultExecutionPolicyMode());
@@ -62,63 +63,124 @@ public class BacktestRunService {
             throw new ApiException(ErrorCode.BACKTEST_RUNNER_NOT_CONFIGURED, "libra-agent 경로를 찾을 수 없습니다: " + agentRoot);
         }
         if (!Files.isRegularFile(script)) {
-            throw new ApiException(ErrorCode.BACKTEST_RUNNER_NOT_CONFIGURED, "백테스트 실행 스크립트를 찾을 수 없습니다: " + script);
+            throw new ApiException(ErrorCode.BACKTEST_RUNNER_NOT_CONFIGURED, "백테스트 replay 스크립트를 찾을 수 없습니다: " + script);
         }
         if (!Files.isRegularFile(envFile)) {
             throw new ApiException(ErrorCode.BACKTEST_RUNNER_NOT_CONFIGURED, "Anthropic API 키 env 파일을 찾을 수 없습니다: " + envFile);
         }
-        if (!Files.isRegularFile(outputDir.resolve("comparison-fixture.json"))) {
+        if (!Files.isRegularFile(fixture)) {
             throw new ApiException(ErrorCode.BACKTEST_RUNNER_NOT_CONFIGURED, "comparison-fixture.json을 찾을 수 없습니다: " + outputDir);
+        }
+        if (!Files.isRegularFile(bundlesDir.resolve("index.json"))) {
+            throw new ApiException(ErrorCode.BACKTEST_RUNNER_NOT_CONFIGURED, "ingest-bundles-article/index.json을 찾을 수 없습니다: " + bundlesDir);
         }
         if (isRunAlive(outputDir.resolve(runId + ".pid.json")) && !force) {
             throw new ApiException(ErrorCode.BACKTEST_RUNNER_CONFLICT, "이미 실행 중인 runId입니다: " + runId);
         }
 
-        List<String> command = new ArrayList<>();
-        command.add(properties.powershellCommand());
-        command.add("-NoProfile");
-        command.add("-ExecutionPolicy");
-        command.add("Bypass");
-        command.add("-File");
-        command.add(script.toString());
-        addArg(command, "-OutDir", outputDir.toString());
-        addArg(command, "-EnvFile", envFile.toString());
-        addArg(command, "-Model", model);
-        addArg(command, "-GovernancePreset", governancePreset);
-        addArg(command, "-PromptVariant", request.promptVariant());
-        addArg(command, "-ExecutionPolicyMode", executionPolicyMode);
-        addArg(command, "-ExecutionParticipationRate", request.executionParticipationRate());
-        addArg(command, "-ExecutionMaxAbsDeltaPct", request.executionMaxAbsDeltaPct());
-        addArg(command, "-ExecutionResolveTickerConflicts", boolText(request.executionResolveTickerConflicts(), true));
-        addArg(command, "-IssueStateEnabled", boolText(request.issueStateEnabled(), true));
-        addArg(command, "-IssueStateCooldownObservations", intText(request.issueStateCooldownObservations(), 20));
-        addArg(command, "-StartDate", request.startDate() == null ? null : request.startDate().toString());
-        addArg(command, "-EndDate", request.endDate() == null ? null : request.endDate().toString());
-        addArg(command, "-DecisionFrequency", frequency);
-        addArg(command, "-DecisionInterval", Integer.toString(interval));
-        if (request.limit() != null) {
-            addArg(command, "-Limit", request.limit().toString());
+        Path rawOut = outputDir.resolve("libra-replay-results." + runId + ".jsonl").normalize();
+        Path decisionsOut = outputDir.resolve("libra-decisions." + runId + ".json").normalize();
+        Path summaryOut = outputDir.resolve(runId + ".summary.json").normalize();
+        Path usageLog = outputDir.resolve("anthropic-" + runId + ".usage.jsonl").normalize();
+        Path traceOut = outputDir.resolve(runId + ".trace.jsonl").normalize();
+        Path stdoutLog = outputDir.resolve(runId + ".stdout.log").normalize();
+        Path stderrLog = outputDir.resolve(runId + ".stderr.log").normalize();
+        Path pidPath = outputDir.resolve(runId + ".pid.json").normalize();
+        List<Path> outputPaths = List.of(rawOut, decisionsOut, summaryOut, usageLog, traceOut, stdoutLog, stderrLog, pidPath);
+        List<Path> existing = outputPaths.stream().filter(Files::exists).toList();
+        if (!existing.isEmpty() && !force) {
+            throw new ApiException(ErrorCode.BACKTEST_RUNNER_CONFLICT, "이미 같은 runId 산출물이 있습니다: " + runId);
         }
-        addArg(command, "-RunId", runId);
         if (force) {
-            command.add("-Force");
+            for (Path path : existing) {
+                deleteIfExists(path);
+            }
+        }
+
+        List<String> command = new ArrayList<>();
+        command.add(resolvePythonCommand(agentRoot));
+        command.add(script.toString());
+        addArg(command, "--fixture", fixture.toString());
+        addArg(command, "--bundles-dir", bundlesDir.toString());
+        addArg(command, "--out", decisionsOut.toString());
+        addArg(command, "--summary-out", summaryOut.toString());
+        addArg(command, "--raw-out", rawOut.toString());
+        addArg(command, "--usage-log", usageLog.toString());
+        addArg(command, "--trace-out", traceOut.toString());
+        addArg(command, "--backend", "anthropic");
+        addArg(command, "--anthropic-model", model);
+        command.add("--fail-on-fallback-events");
+        addArg(command, "--decision-frequency", frequency);
+        addArg(command, "--decision-interval", Integer.toString(interval));
+        addArg(command, "--progress-every", "10");
+        if (request.limit() != null) {
+            addArg(command, "--limit", request.limit().toString());
+        }
+        if (request.startDate() != null) {
+            addArg(command, "--start-date", request.startDate().toString());
+        }
+        if (request.endDate() != null) {
+            addArg(command, "--end-date", request.endDate().toString());
         }
 
         ProcessBuilder builder = new ProcessBuilder(command);
         builder.directory(agentRoot.toFile());
+        builder.redirectOutput(ProcessBuilder.Redirect.to(stdoutLog.toFile()));
+        builder.redirectError(ProcessBuilder.Redirect.to(stderrLog.toFile()));
+        configureReplayEnvironment(
+            builder.environment(),
+            envFile,
+            model,
+            governancePreset,
+            request.promptVariant(),
+            executionPolicyMode,
+            request.executionParticipationRate(),
+            request.executionMaxAbsDeltaPct(),
+            boolText(request.executionResolveTickerConflicts(), true),
+            boolText(request.issueStateEnabled(), true),
+            intText(request.issueStateCooldownObservations(), 20)
+        );
+
         try {
             Process process = builder.start();
-            boolean finished = process.waitFor(60, TimeUnit.SECONDS);
-            String stdout = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-            String stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
-            if (!finished) {
-                process.destroyForcibly();
-                throw new ApiException(ErrorCode.BACKTEST_RUNNER_FAILED, "백테스트 시작 스크립트가 60초 안에 반환되지 않았습니다");
-            }
-            if (process.exitValue() != 0) {
+            writePid(
+                pidPath,
+                runId,
+                process.pid(),
+                agentRoot,
+                command.getFirst(),
+                script,
+                fixture,
+                bundlesDir,
+                rawOut,
+                decisionsOut,
+                summaryOut,
+                usageLog,
+                traceOut,
+                stdoutLog,
+                stderrLog,
+                model,
+                governancePreset,
+                request.promptVariant(),
+                executionPolicyMode,
+                request.executionParticipationRate(),
+                request.executionMaxAbsDeltaPct(),
+                boolText(request.executionResolveTickerConflicts(), true),
+                boolText(request.issueStateEnabled(), true),
+                intText(request.issueStateCooldownObservations(), 20),
+                sourceFixtureRows(fixture),
+                expectedRows(fixture, request.startDate() == null ? null : request.startDate().toString(), request.endDate() == null ? null : request.endDate().toString(), request.limit()),
+                request.limit(),
+                request.startDate() == null ? null : request.startDate().toString(),
+                request.endDate() == null ? null : request.endDate().toString(),
+                frequency,
+                interval
+            );
+            Thread.sleep(500);
+            if (!process.isAlive() && process.exitValue() != 0) {
                 throw new ApiException(
                     ErrorCode.BACKTEST_RUNNER_FAILED,
-                    "백테스트 시작 실패: " + compact(stderr, stdout)
+                    "백테스트 시작 실패: " + compact(String.join("\n", tail(stderrLog, 20)), String.join("\n", tail(stdoutLog, 20)))
                 );
             }
             return status(runId);
@@ -242,6 +304,207 @@ public class BacktestRunService {
         }
         command.add(name);
         command.add(value);
+    }
+
+    private String resolvePythonCommand(Path agentRoot) {
+        if (properties.pythonCommand() != null && !properties.pythonCommand().isBlank()) {
+            return properties.pythonCommand();
+        }
+        Path windowsVenv = agentRoot.resolve(".venv").resolve("Scripts").resolve("python.exe");
+        if (Files.isRegularFile(windowsVenv)) {
+            return windowsVenv.toString();
+        }
+        Path posixVenv = agentRoot.resolve(".venv").resolve("bin").resolve("python");
+        if (Files.isRegularFile(posixVenv)) {
+            return posixVenv.toString();
+        }
+        return isWindows() ? "python" : "python3";
+    }
+
+    private static boolean isWindows() {
+        return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
+    }
+
+    private void configureReplayEnvironment(
+        Map<String, String> env,
+        Path envFile,
+        String model,
+        String governancePreset,
+        String promptVariant,
+        String executionPolicyMode,
+        String executionParticipationRate,
+        String executionMaxAbsDeltaPct,
+        String executionResolveTickerConflicts,
+        String issueStateEnabled,
+        String issueStateCooldownObservations
+    ) {
+        loadDotenv(env, envFile);
+        if (isBlank(env.get("ANTHROPIC_API_KEY"))) {
+            throw new ApiException(ErrorCode.BACKTEST_RUNNER_NOT_CONFIGURED, "ANTHROPIC_API_KEY가 env 파일에 필요합니다: " + envFile);
+        }
+        env.put("PYTHONPATH", "src");
+        env.put("LIBRA_LLM_PROVIDER", "anthropic");
+        env.put("LIBRA_ANTHROPIC_MODEL", model);
+        env.put("LIBRA_DOMAIN_AGENTS_ENABLED", "true");
+        env.put("LLM_ROUTING_POLICY", "claude");
+        env.put("LIBRA_DISABLE_AGENT_FALLBACKS", "true");
+        env.put("LIBRA_SENTIMENT_PHASE2_ENABLED", "false");
+        env.put("LIBRA_LLM_TIMEOUT_SECONDS", "180");
+        env.put("LIBRA_LLM_REQUEST_TIMEOUT_SECONDS", "180");
+        env.put("LIBRA_ANTHROPIC_CHAT_JSON_ATTEMPTS", valueOrDefault(env.get("LIBRA_ANTHROPIC_CHAT_JSON_ATTEMPTS"), "5"));
+        env.put("LIBRA_ANTHROPIC_RETRY_SLEEP_SECONDS", valueOrDefault(env.get("LIBRA_ANTHROPIC_RETRY_SLEEP_SECONDS"), "2"));
+        env.put("LIBRA_COMMITTEE_ROUND1_MAX_WORKERS", "11");
+        env.put("LIBRA_COMMITTEE_ROUND2_MAX_WORKERS", "4");
+        env.put("LIBRA_COMMITTEE_LLM_REPAIR_ATTEMPTS", "1");
+        env.put("LIBRA_DROP_INVALID_MEDIATOR_TARGETS", "true");
+        env.put("LIBRA_COMMITTEE_OPINION_REASONING_CHARS", "420");
+        putOrRemove(env, "LIBRA_GOVERNANCE_PRESET", governancePreset);
+        putOrRemove(env, "LIBRA_PROMPT_VARIANT", promptVariant);
+        putOrRemove(env, "LIBRA_EXECUTION_POLICY_MODE", executionPolicyMode);
+        putOrRemove(env, "LIBRA_EXECUTION_PARTICIPATION_RATE", executionParticipationRate);
+        putOrRemove(env, "LIBRA_EXECUTION_MAX_ABS_DELTA_PCT", executionMaxAbsDeltaPct);
+        putOrRemove(env, "LIBRA_EXECUTION_RESOLVE_TICKER_CONFLICTS", executionResolveTickerConflicts);
+        putOrRemove(env, "LIBRA_ISSUE_STATE_ENABLED", issueStateEnabled);
+        putOrRemove(env, "LIBRA_ISSUE_STATE_COOLDOWN_OBSERVATIONS", issueStateCooldownObservations);
+    }
+
+    private static void loadDotenv(Map<String, String> env, Path envFile) {
+        for (String row : readAllLines(envFile)) {
+            String line = row.trim();
+            if (line.isBlank() || line.startsWith("#") || !line.contains("=")) {
+                continue;
+            }
+            String[] parts = line.split("=", 2);
+            String name = parts[0].trim();
+            String value = parts.length > 1 ? parts[1].trim() : "";
+            if ((value.startsWith("\"") && value.endsWith("\"")) || (value.startsWith("'") && value.endsWith("'"))) {
+                value = value.substring(1, value.length() - 1);
+            }
+            if (!name.isBlank()) {
+                env.put(name, value);
+            }
+        }
+    }
+
+    private static List<String> readAllLines(Path path) {
+        try {
+            return Files.readAllLines(path, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new ApiException(ErrorCode.BACKTEST_RUNNER_FAILED, "파일을 읽을 수 없습니다: " + path, e);
+        }
+    }
+
+    private static void putOrRemove(Map<String, String> env, String key, String value) {
+        if (value == null || value.isBlank()) {
+            env.remove(key);
+        } else {
+            env.put(key, value);
+        }
+    }
+
+    private void writePid(
+        Path pidPath,
+        String runId,
+        long pid,
+        Path agentRoot,
+        String python,
+        Path script,
+        Path fixture,
+        Path bundlesDir,
+        Path rawOut,
+        Path decisionsOut,
+        Path summaryOut,
+        Path usageLog,
+        Path traceOut,
+        Path stdoutLog,
+        Path stderrLog,
+        String model,
+        String governancePreset,
+        String promptVariant,
+        String executionPolicyMode,
+        String executionParticipationRate,
+        String executionMaxAbsDeltaPct,
+        String executionResolveTickerConflicts,
+        String issueStateEnabled,
+        String issueStateCooldownObservations,
+        int sourceFixtureRows,
+        int expectedRows,
+        Integer limit,
+        String startDate,
+        String endDate,
+        String frequency,
+        int interval
+    ) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("run_id", runId);
+        payload.put("pid", pid);
+        payload.put("started_at", OffsetDateTime.now(ZoneId.of("Asia/Seoul")).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
+        payload.put("cwd", agentRoot.toString());
+        payload.put("python", python);
+        payload.put("script", script.toString());
+        payload.put("fixture", fixture.toString());
+        payload.put("bundles_dir", bundlesDir.toString());
+        payload.put("raw_out", rawOut.toString());
+        payload.put("decisions_out", decisionsOut.toString());
+        payload.put("summary_out", summaryOut.toString());
+        payload.put("usage_log", usageLog.toString());
+        payload.put("trace_out", traceOut.toString());
+        payload.put("stdout_log", stdoutLog.toString());
+        payload.put("stderr_log", stderrLog.toString());
+        payload.put("source_fixture_rows", sourceFixtureRows);
+        payload.put("expected_rows", expectedRows);
+        payload.put("requested_limit", limit == null ? 0 : limit);
+        payload.put("start_date", startDate);
+        payload.put("end_date", endDate);
+        payload.put("decision_frequency", frequency);
+        payload.put("decision_interval", interval);
+        payload.put("backend", "anthropic");
+        payload.put("model", model);
+        payload.put("governance_preset", valueOrDefault(governancePreset, "default"));
+        payload.put("prompt_variant", valueOrDefault(promptVariant, "default"));
+        payload.put("runtime", "JudgeOrchestrator.run_v1_committee");
+        payload.put("domain_agents_enabled", "true");
+        payload.put("disable_agent_fallbacks", "true");
+        payload.put("sentiment_phase2_enabled", "false");
+        payload.put("committee_round1_max_workers", "11");
+        payload.put("committee_round2_max_workers", "4");
+        payload.put("execution_policy_mode", executionPolicyMode);
+        payload.put("execution_participation_rate", executionParticipationRate);
+        payload.put("execution_max_abs_delta_pct", executionMaxAbsDeltaPct);
+        payload.put("execution_resolve_ticker_conflicts", executionResolveTickerConflicts);
+        payload.put("issue_state_enabled", issueStateEnabled);
+        payload.put("issue_state_cooldown_observations", issueStateCooldownObservations);
+        try {
+            objectMapper.writerWithDefaultPrettyPrinter().writeValue(pidPath.toFile(), payload);
+        } catch (IOException e) {
+            throw new ApiException(ErrorCode.BACKTEST_RUNNER_FAILED, "PID 파일을 쓸 수 없습니다: " + pidPath, e);
+        }
+    }
+
+    private int sourceFixtureRows(Path fixture) {
+        return fixtureDates(fixture).size();
+    }
+
+    private int expectedRows(Path fixture, String startDate, String endDate, Integer limit) {
+        int selected = 0;
+        for (String date : fixtureDates(fixture)) {
+            if ((startDate == null || date.compareTo(startDate) >= 0) && (endDate == null || date.compareTo(endDate) <= 0)) {
+                selected++;
+            }
+        }
+        return limit == null ? selected : Math.min(limit, selected);
+    }
+
+    private static void deleteIfExists(Path path) {
+        try {
+            Files.deleteIfExists(path);
+        } catch (IOException e) {
+            throw new ApiException(ErrorCode.BACKTEST_RUNNER_FAILED, "기존 산출물을 삭제할 수 없습니다: " + path, e);
+        }
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     private static String boolText(Boolean value, boolean defaultValue) {

@@ -76,7 +76,7 @@ libra:
       agent-repo-root: '${LIBRA_AGENT_REPO_ROOT:D:\libra-agent}'
       output-dir: '${LIBRA_BACKTEST_RUNNER_OUTPUT_DIR:D:\Libra\outputs\backtests\kr-objective-2020-2023-opendart-googlenews}'
       env-file: '${LIBRA_BACKTEST_RUNNER_ENV_FILE:D:\libra-agent\.env.live.local}'
-      powershell-command: ${LIBRA_BACKTEST_RUNNER_POWERSHELL:powershell}
+      python-command: ${LIBRA_BACKTEST_RUNNER_PYTHON:}
       default-model: ${LIBRA_BACKTEST_RUNNER_MODEL:claude-haiku-4-5-20251001}
       default-governance-preset: ${LIBRA_BACKTEST_RUNNER_GOVERNANCE_PRESET:aggressive}
       default-execution-policy-mode: ${LIBRA_BACKTEST_RUNNER_EXECUTION_POLICY_MODE:RISK_TRIM_AND_REDISTRIBUTE}
