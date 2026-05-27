@@ -1,6 +1,7 @@
 package com.libra.api.backtest.api;
 
 import com.libra.api.backtest.api.dto.BacktestRunStartRequest;
+import com.libra.api.backtest.api.dto.BacktestRunConversationResponse;
 import com.libra.api.backtest.api.dto.BacktestRunStatusResponse;
 import com.libra.api.backtest.service.BacktestRunService;
 import com.libra.api.config.OpenApiConfig;
@@ -11,6 +12,7 @@ import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -37,5 +39,14 @@ public class BacktestRunAdminController {
     @GetMapping("/{runId}")
     public BacktestRunStatusResponse status(@PathVariable String runId) {
         return runs.status(runId);
+    }
+
+    @Operation(summary = "Get per-day backtest committee conversation")
+    @GetMapping("/{runId}/conversation")
+    public BacktestRunConversationResponse conversation(
+        @PathVariable String runId,
+        @RequestParam(required = false) String date
+    ) {
+        return runs.conversation(runId, date);
     }
 }

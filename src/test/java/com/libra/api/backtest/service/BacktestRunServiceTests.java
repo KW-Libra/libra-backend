@@ -3,6 +3,7 @@ package com.libra.api.backtest.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.libra.api.backtest.api.dto.BacktestRunConversationResponse;
 import com.libra.api.backtest.api.dto.BacktestRunStatusResponse;
 import com.libra.api.backtest.api.dto.BacktestRunStartRequest;
 import com.libra.api.backtest.config.BacktestRunnerProperties;
@@ -68,8 +69,8 @@ class BacktestRunServiceTests {
         Files.writeString(
             raw,
             """
-            {"date":"2020-01-02","result":{"agent_responses":[{"agent_id":"risk"}],"decision":{"decision":"DEFER","candidate_rebalance_plan":{},"auto_safeguards":{"governance_v1_branch":"NO_EXECUTABLE_TRADE"}},"governance_v1":{"final_decision":{"decision":"DEFER","branch":"NO_EXECUTABLE_TRADE","trades":[]}}}}
-            {"date":"2020-01-03","result":{"agent_responses":[{"agent_id":"risk"},{"agent_id":"news"}],"decision":{"decision":"REBALANCE","candidate_rebalance_plan":{"005930":-0.02},"auto_safeguards":{"governance_v1_branch":"CONFLICT_RESOLUTION"}},"governance_v1":{"final_decision":{"decision":"REBALANCE","branch":"CONFLICT_RESOLUTION","trades":[{"ticker":"005930"}]}}}}
+            {"date":"2020-01-02","query":"점검해줘","model":"claude-haiku-4-5-20251001","result":{"agent_responses":[{"agent_id":"risk","opinion":"NEUTRAL","verdict":"DIRECT_ANSWER","confidence":0.5,"direction":0.0,"risk_level":"low","focus_tickers":["005930"],"query_understood":"리스크 점검","reasoning_for_judge_agent":"유지 가능","tools_called":[{"tool_name":"risk.scan","purpose":"risk check","summary":"no breach"}]}],"decision":{"decision":"DEFER","candidate_rebalance_plan":{},"auto_safeguards":{"governance_v1_branch":"NO_EXECUTABLE_TRADE"}},"governance_v1":{"execution_plan":{"mode":"RISK_TRIM_AND_REDISTRIBUTE"},"final_decision":{"decision":"DEFER","branch":"NO_EXECUTABLE_TRADE","reasoning":"거래 불필요","trades":[]}}}}
+            {"date":"2020-01-03","query":"점검해줘","model":"claude-haiku-4-5-20251001","result":{"agent_responses":[{"agent_id":"risk","opinion":"BUY_BIAS","verdict":"DIRECT_ANSWER","confidence":0.8,"direction":0.6,"risk_level":"mid","focus_tickers":["005930"],"query_understood":"리스크 점검","reasoning_for_judge_agent":"집중도 축소 필요","tools_called":[{"tool_name":"risk.scan","purpose":"risk check","summary":"breach"}]},{"agent_id":"news","opinion":"NEUTRAL","verdict":"PARTIAL_ANSWER","confidence":0.4,"direction":0.0,"risk_level":"low","focus_tickers":["005930"],"query_understood":"뉴스 점검","reasoning_for_judge_agent":"특이 뉴스 없음","tools_called":[]}],"decision":{"decision":"REBALANCE","candidate_rebalance_plan":{"005930":-0.02},"auto_safeguards":{"governance_v1_branch":"CONFLICT_RESOLUTION"}},"governance_v1":{"execution_plan":{"mode":"RISK_TRIM_AND_REDISTRIBUTE"},"final_decision":{"decision":"REBALANCE","branch":"CONFLICT_RESOLUTION","reasoning":"집중도 완화","trades":[{"ticker":"005930"}]}}}}
             """
         );
         Files.writeString(
@@ -109,6 +110,15 @@ class BacktestRunServiceTests {
         assertThat(status.inputTokens()).isEqualTo(21);
         assertThat(status.outputTokens()).isEqualTo(12);
         assertThat(status.fallbackEventCount()).isEqualTo(1);
+
+        BacktestRunConversationResponse conversation = service.conversation(runId, "2020-01-03");
+
+        assertThat(conversation.days()).hasSize(2);
+        assertThat(conversation.selectedDate()).isEqualTo("2020-01-03");
+        assertThat(conversation.conversation().finalDecision().decision()).isEqualTo("REBALANCE");
+        assertThat(conversation.conversation().executionPlan()).containsEntry("mode", "RISK_TRIM_AND_REDISTRIBUTE");
+        assertThat(conversation.conversation().agents()).extracting("agentId").containsExactly("risk", "news");
+        assertThat(conversation.conversation().agents().getFirst().tools()).extracting("toolName").containsExactly("risk.scan");
     }
 
     @Test

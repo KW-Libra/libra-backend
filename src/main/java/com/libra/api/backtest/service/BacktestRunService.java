@@ -2,6 +2,8 @@ package com.libra.api.backtest.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.libra.api.backtest.api.dto.BacktestRunConversationResponse;
 import com.libra.api.backtest.api.dto.BacktestRunStartRequest;
 import com.libra.api.backtest.api.dto.BacktestRunStatusResponse;
 import com.libra.api.backtest.config.BacktestRunnerProperties;
@@ -264,6 +266,45 @@ public class BacktestRunService {
             stderrLog.toString(),
             stdoutTail,
             stderrTail
+        );
+    }
+
+    public BacktestRunConversationResponse conversation(String runId, String date) {
+        ensureRunnerConfigured();
+        if (runId == null || runId.isBlank()) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "runId가 필요합니다");
+        }
+        Path outputDir = properties.outputDir().normalize();
+        Path pidPath = outputDir.resolve(runId + ".pid.json");
+        Path rawOut = Files.isRegularFile(pidPath)
+            ? path(readJson(pidPath), "raw_out", outputDir.resolve("libra-replay-results." + runId + ".jsonl"))
+            : outputDir.resolve("libra-replay-results." + runId + ".jsonl");
+
+        List<JsonNode> rows = rawRows(rawOut);
+        List<BacktestRunConversationResponse.BacktestRunDaySummary> days = new ArrayList<>();
+        JsonNode selected = null;
+        String requestedDate = date == null || date.isBlank() ? null : date.trim();
+
+        for (JsonNode row : rows) {
+            String rowDate = text(row, "date", null);
+            if (rowDate == null) {
+                continue;
+            }
+            days.add(daySummary(row));
+            if ((requestedDate != null && requestedDate.equals(rowDate)) || (requestedDate == null)) {
+                selected = row;
+            }
+        }
+
+        if (requestedDate != null && selected == null) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "해당 날짜의 백테스트 대화를 찾을 수 없습니다: " + requestedDate);
+        }
+
+        return new BacktestRunConversationResponse(
+            runId,
+            selected == null ? null : text(selected, "date", null),
+            days,
+            selected == null ? null : dayConversation(selected)
         );
     }
 
@@ -674,6 +715,146 @@ public class BacktestRunService {
             }
         }
         return new UsageStats(requests, input, output, cacheCreation, cacheRead);
+    }
+
+    private List<JsonNode> rawRows(Path rawOut) {
+        List<JsonNode> rows = new ArrayList<>();
+        for (String line : lines(rawOut)) {
+            try {
+                rows.add(objectMapper.readTree(line));
+            } catch (IOException ignored) {
+                // Ignore a partial trailing line while the replay is still writing.
+            }
+        }
+        return rows;
+    }
+
+    private BacktestRunConversationResponse.BacktestRunDaySummary daySummary(JsonNode row) {
+        JsonNode result = row.path("result");
+        JsonNode decisionNode = result.path("decision");
+        JsonNode finalNode = result.path("governance_v1").path("final_decision");
+        String decision = firstText(finalNode.path("decision"), decisionNode.path("decision"));
+        String branch = firstText(finalNode.path("branch"), decisionNode.path("auto_safeguards").path("governance_v1_branch"));
+        JsonNode trades = finalNode.path("trades");
+        boolean userActionRequired = "USER_DECISION_REQUIRED".equals(decision)
+            || boolValue(decisionNode.path("user_notification").path("action_required"))
+            || (!finalNode.path("user_question").isMissingNode() && !finalNode.path("user_question").isNull());
+
+        return new BacktestRunConversationResponse.BacktestRunDaySummary(
+            text(row, "date", null),
+            decision,
+            branch,
+            result.path("agent_responses").isArray() ? result.path("agent_responses").size() : 0,
+            trades.isArray() ? trades.size() : 0,
+            userActionRequired
+        );
+    }
+
+    private BacktestRunConversationResponse.BacktestRunDayConversation dayConversation(JsonNode row) {
+        JsonNode result = row.path("result");
+        JsonNode governance = result.path("governance_v1");
+        JsonNode finalNode = governance.path("final_decision");
+        JsonNode decisionNode = result.path("decision");
+        BacktestRunConversationResponse.BacktestRunFinalDecision finalDecision =
+            new BacktestRunConversationResponse.BacktestRunFinalDecision(
+                firstText(finalNode.path("decision"), decisionNode.path("decision")),
+                firstText(finalNode.path("branch"), decisionNode.path("auto_safeguards").path("governance_v1_branch")),
+                truncate(text(finalNode, "reasoning", null), 2400),
+                truncate(text(finalNode, "user_question", null), 800),
+                mapList(finalNode.path("trades"))
+            );
+
+        return new BacktestRunConversationResponse.BacktestRunDayConversation(
+            text(row, "date", null),
+            truncate(text(row, "query", null), 600),
+            text(row, "model", null),
+            finalDecision,
+            agentMessages(result.path("agent_responses")),
+            agentMessages(governance.path("round2_responses")),
+            mapObject(governance.path("execution_plan"))
+        );
+    }
+
+    private List<BacktestRunConversationResponse.BacktestRunAgentMessage> agentMessages(JsonNode nodes) {
+        if (!nodes.isArray()) {
+            return List.of();
+        }
+        List<BacktestRunConversationResponse.BacktestRunAgentMessage> messages = new ArrayList<>();
+        for (JsonNode node : nodes) {
+            messages.add(new BacktestRunConversationResponse.BacktestRunAgentMessage(
+                text(node, "agent_id", null),
+                text(node, "opinion", null),
+                text(node, "verdict", null),
+                doubleOrNull(node.path("confidence")),
+                doubleOrNull(node.path("direction")),
+                text(node, "risk_level", null),
+                textList(node.path("focus_tickers")),
+                truncate(text(node, "query_understood", null), 600),
+                truncate(text(node, "reasoning_for_judge_agent", null), 2600),
+                truncate(text(node, "limits_acknowledged", null), 1200),
+                toolCalls(node.path("tools_called"))
+            ));
+        }
+        return messages;
+    }
+
+    private List<BacktestRunConversationResponse.BacktestRunToolCall> toolCalls(JsonNode nodes) {
+        if (!nodes.isArray()) {
+            return List.of();
+        }
+        List<BacktestRunConversationResponse.BacktestRunToolCall> calls = new ArrayList<>();
+        for (JsonNode node : nodes) {
+            calls.add(new BacktestRunConversationResponse.BacktestRunToolCall(
+                text(node, "tool_name", null),
+                truncate(text(node, "purpose", null), 400),
+                truncate(text(node, "summary", null), 900)
+            ));
+        }
+        return calls;
+    }
+
+    private List<String> textList(JsonNode nodes) {
+        if (!nodes.isArray()) {
+            return List.of();
+        }
+        List<String> values = new ArrayList<>();
+        for (JsonNode node : nodes) {
+            if (!node.isNull() && !node.asText().isBlank()) {
+                values.add(node.asText());
+            }
+        }
+        return values;
+    }
+
+    private List<Map<String, Object>> mapList(JsonNode nodes) {
+        if (!nodes.isArray()) {
+            return List.of();
+        }
+        List<Map<String, Object>> values = new ArrayList<>();
+        for (JsonNode node : nodes) {
+            if (node.isObject()) {
+                values.add(mapObject(node));
+            }
+        }
+        return values;
+    }
+
+    private Map<String, Object> mapObject(JsonNode node) {
+        if (node == null || !node.isObject()) {
+            return Map.of();
+        }
+        return objectMapper.convertValue(node, new TypeReference<Map<String, Object>>() {});
+    }
+
+    private static Double doubleOrNull(JsonNode node) {
+        return node == null || node.isMissingNode() || node.isNull() ? null : node.asDouble();
+    }
+
+    private static String truncate(String value, int maxChars) {
+        if (value == null || value.length() <= maxChars) {
+            return value;
+        }
+        return value.substring(0, Math.max(0, maxChars - 3)) + "...";
     }
 
     private List<String> fixtureDates(Path fixture) {
