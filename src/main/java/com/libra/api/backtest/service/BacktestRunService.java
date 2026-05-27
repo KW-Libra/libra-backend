@@ -52,7 +52,7 @@ public class BacktestRunService {
         Path outputDir = properties.outputDir().normalize();
         Path envFile = properties.envFile().normalize();
         Path bundlesDir = outputDir.resolve("ingest-bundles-article").normalize();
-        Path fixture = outputDir.resolve("comparison-fixture.json").normalize();
+        Path fixture = fixturePath(outputDir);
         String model = valueOrDefault(request.model(), properties.defaultModel());
         String governancePreset = valueOrDefault(request.governancePreset(), properties.defaultGovernancePreset());
         String executionPolicyMode = valueOrDefault(request.executionPolicyMode(), properties.defaultExecutionPolicyMode());
@@ -67,11 +67,14 @@ public class BacktestRunService {
         if (!Files.isRegularFile(script)) {
             throw new ApiException(ErrorCode.BACKTEST_RUNNER_NOT_CONFIGURED, "백테스트 replay 스크립트를 찾을 수 없습니다: " + script);
         }
-        if (!Files.isRegularFile(envFile)) {
-            throw new ApiException(ErrorCode.BACKTEST_RUNNER_NOT_CONFIGURED, "Anthropic API 키 env 파일을 찾을 수 없습니다: " + envFile);
+        if (!Files.isRegularFile(envFile) && isBlank(System.getenv("ANTHROPIC_API_KEY"))) {
+            throw new ApiException(
+                ErrorCode.BACKTEST_RUNNER_NOT_CONFIGURED,
+                "Anthropic API 키 env 파일을 찾을 수 없고 서버 환경변수 ANTHROPIC_API_KEY도 없습니다: " + envFile
+            );
         }
         if (!Files.isRegularFile(fixture)) {
-            throw new ApiException(ErrorCode.BACKTEST_RUNNER_NOT_CONFIGURED, "comparison-fixture.json을 찾을 수 없습니다: " + outputDir);
+            throw new ApiException(ErrorCode.BACKTEST_RUNNER_NOT_CONFIGURED, "백테스트 fixture를 찾을 수 없습니다: " + fixture);
         }
         if (!Files.isRegularFile(bundlesDir.resolve("index.json"))) {
             throw new ApiException(ErrorCode.BACKTEST_RUNNER_NOT_CONFIGURED, "ingest-bundles-article/index.json을 찾을 수 없습니다: " + bundlesDir);
@@ -215,7 +218,7 @@ public class BacktestRunService {
         Path traceOut = path(pid, "trace_out", outputDir.resolve(runId + ".trace.jsonl"));
         Path stdoutLog = path(pid, "stdout_log", outputDir.resolve(runId + ".stdout.log"));
         Path stderrLog = path(pid, "stderr_log", outputDir.resolve(runId + ".stderr.log"));
-        Path fixture = path(pid, "fixture", outputDir.resolve("comparison-fixture.json"));
+        Path fixture = path(pid, "fixture", fixturePath(outputDir));
 
         RawStats rawStats = readRawStats(rawOut, fixture);
         UsageStats usageStats = readUsageStats(usageLog);
@@ -366,6 +369,14 @@ public class BacktestRunService {
         return isWindows() ? "python" : "python3";
     }
 
+    private Path fixturePath(Path outputDir) {
+        Path fixtureFile = properties.fixtureFile();
+        if (fixtureFile.isAbsolute()) {
+            return fixtureFile.normalize();
+        }
+        return outputDir.resolve(fixtureFile).normalize();
+    }
+
     private static boolean isWindows() {
         return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
     }
@@ -383,9 +394,14 @@ public class BacktestRunService {
         String issueStateEnabled,
         String issueStateCooldownObservations
     ) {
-        loadDotenv(env, envFile);
+        if (Files.isRegularFile(envFile)) {
+            loadDotenv(env, envFile);
+        }
         if (isBlank(env.get("ANTHROPIC_API_KEY"))) {
-            throw new ApiException(ErrorCode.BACKTEST_RUNNER_NOT_CONFIGURED, "ANTHROPIC_API_KEY가 env 파일에 필요합니다: " + envFile);
+            throw new ApiException(
+                ErrorCode.BACKTEST_RUNNER_NOT_CONFIGURED,
+                "ANTHROPIC_API_KEY가 서버 환경변수 또는 env 파일에 필요합니다: " + envFile
+            );
         }
         env.put("PYTHONPATH", "src");
         env.put("LIBRA_LLM_PROVIDER", "anthropic");

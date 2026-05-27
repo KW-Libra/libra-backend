@@ -8,6 +8,7 @@ public record BacktestRunnerProperties(
     boolean enabled,
     Path agentRepoRoot,
     Path outputDir,
+    Path fixtureFile,
     Path envFile,
     String pythonCommand,
     String defaultModel,
@@ -18,10 +19,13 @@ public record BacktestRunnerProperties(
 
     public BacktestRunnerProperties {
         if (agentRepoRoot == null) {
-            agentRepoRoot = Path.of("D:\\libra-agent");
+            agentRepoRoot = Path.of("/opt/libra/backtest-agent/app");
         }
         if (outputDir == null) {
-            outputDir = Path.of("D:\\Libra\\outputs\\backtests\\kr-objective-2020-2023-opendart-googlenews");
+            outputDir = Path.of("/opt/libra/backtests/kr-objective-2020-2023-opendart-googlenews");
+        }
+        if (fixtureFile == null) {
+            fixtureFile = Path.of("comparison-fixture.pykrx-volume.strict.json");
         }
         if (envFile == null) {
             envFile = agentRepoRoot.resolve(".env.live.local");

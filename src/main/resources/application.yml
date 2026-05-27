@@ -73,9 +73,10 @@ libra:
     output-root: ${LIBRA_BACKTEST_OUTPUT_ROOT:/opt/libra/backtests}
     runner:
       enabled: ${LIBRA_BACKTEST_RUNNER_ENABLED:true}
-      agent-repo-root: '${LIBRA_AGENT_REPO_ROOT:D:\libra-agent}'
-      output-dir: '${LIBRA_BACKTEST_RUNNER_OUTPUT_DIR:D:\Libra\outputs\backtests\kr-objective-2020-2023-opendart-googlenews}'
-      env-file: '${LIBRA_BACKTEST_RUNNER_ENV_FILE:D:\libra-agent\.env.live.local}'
+      agent-repo-root: ${LIBRA_AGENT_REPO_ROOT:/opt/libra/backtest-agent/app}
+      output-dir: ${LIBRA_BACKTEST_RUNNER_OUTPUT_DIR:/opt/libra/backtests/kr-objective-2020-2023-opendart-googlenews}
+      fixture-file: ${LIBRA_BACKTEST_RUNNER_FIXTURE_FILE:comparison-fixture.pykrx-volume.strict.json}
+      env-file: ${LIBRA_BACKTEST_RUNNER_ENV_FILE:/opt/libra/backtest-agent/app/.env.live.local}
       python-command: ${LIBRA_BACKTEST_RUNNER_PYTHON:}
       default-model: ${LIBRA_BACKTEST_RUNNER_MODEL:claude-haiku-4-5-20251001}
       default-governance-preset: ${LIBRA_BACKTEST_RUNNER_GOVERNANCE_PRESET:aggressive}

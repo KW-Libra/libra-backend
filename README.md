@@ -84,7 +84,7 @@ Swagger UI:
 | JWT 필터 | `auth/security/JwtAuthFilter` — `Authorization: Bearer` *또는* `?token=` (SSE 호환) |
 | Agent relay | `agent/AgentSseClient` — backend JWT 인증 후 agent SSE 를 Vue 로 중계 |
 | Backtest reports | `backtest` — private S3의 검증 리포트를 읽어 public API로 제공. 기본 URI는 `LIBRA_BACKTEST_PUBLIC_RSS_3Y_VALIDATION_URI` |
-| Backtest runner | `backtest` — backend가 `libra-agent/scripts/replay_full_committee_backtest.py`를 직접 실행하고 raw/usage/trace 산출물 상태를 읽음. `LIBRA_AGENT_REPO_ROOT`, `LIBRA_BACKTEST_RUNNER_OUTPUT_DIR`, `LIBRA_BACKTEST_RUNNER_ENV_FILE`, `LIBRA_BACKTEST_RUNNER_PYTHON` 로 경로 조정 |
+| Backtest runner | `backtest` — backend가 `libra-agent/scripts/replay_full_committee_backtest.py`를 직접 실행하고 raw/usage/trace 산출물 상태를 읽음. `LIBRA_AGENT_REPO_ROOT`, `LIBRA_BACKTEST_RUNNER_OUTPUT_DIR`, `LIBRA_BACKTEST_RUNNER_FIXTURE_FILE`, `LIBRA_BACKTEST_RUNNER_ENV_FILE`, `LIBRA_BACKTEST_RUNNER_PYTHON` 로 경로 조정. 기본 fixture는 volume 포함 strict fixture(`comparison-fixture.pykrx-volume.strict.json`) |
 | Live ingest | `ingest/LiveIngestService` — run 시작 전 `D:\libra-ingest` live pipeline을 `--require-article-body`로 실행하고, 결과를 백테스트 replay와 같은 `ingest_bundle` 계약으로 agent에 전달 |
 | KIS credentials | `broker/kis/domain/KisCredential` — 사용자별 KIS App Key/Secret 암호화 저장. `KIS_CREDENTIAL_ENCRYPTION_KEY` 필요 |
 | KIS broker | `broker/kis` — 한국투자증권 시세/계좌/주문 경계. agent 에 broker key 를 주지 않음 |
