@@ -1,11 +1,16 @@
 package com.libra.api.backtest.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.libra.api.backtest.api.dto.BacktestRunStatusResponse;
+import com.libra.api.backtest.api.dto.BacktestRunStartRequest;
 import com.libra.api.backtest.config.BacktestRunnerProperties;
+import com.libra.api.common.error.ApiException;
+import com.libra.api.common.error.ErrorCode;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -83,7 +88,7 @@ class BacktestRunServiceTests {
             tempDir,
             tempDir,
             tempDir.resolve(".env.live.local"),
-            "powershell",
+            null,
             "claude-haiku-4-5-20251001",
             "aggressive",
             "RISK_TRIM_AND_REDISTRIBUTE",
@@ -104,5 +109,59 @@ class BacktestRunServiceTests {
         assertThat(status.inputTokens()).isEqualTo(21);
         assertThat(status.outputTokens()).isEqualTo(12);
         assertThat(status.fallbackEventCount()).isEqualTo(1);
+    }
+
+    @Test
+    void rejectsStartingAnyRunWhenAnotherBacktestProcessIsAlive() throws Exception {
+        Files.createDirectories(tempDir.resolve("scripts"));
+        Files.writeString(tempDir.resolve("scripts").resolve("replay_full_committee_backtest.py"), "print('unused')\n");
+        Files.writeString(tempDir.resolve(".env.live.local"), "ANTHROPIC_API_KEY=test-key\n");
+        Files.writeString(tempDir.resolve("comparison-fixture.json"), "{\"prices\":[{\"date\":\"2020-01-02\"}]}\n");
+        Files.createDirectories(tempDir.resolve("ingest-bundles-article"));
+        Files.writeString(tempDir.resolve("ingest-bundles-article").resolve("index.json"), "{}\n");
+        Files.writeString(
+            tempDir.resolve("already-running.pid.json"),
+            """
+            {
+              "run_id": "already-running",
+              "pid": %d,
+              "expected_rows": 10
+            }
+            """.formatted(ProcessHandle.current().pid())
+        );
+
+        BacktestRunService service = new BacktestRunService(new BacktestRunnerProperties(
+            true,
+            tempDir,
+            tempDir,
+            tempDir.resolve(".env.live.local"),
+            "python",
+            "claude-haiku-4-5-20251001",
+            "aggressive",
+            "RISK_TRIM_AND_REDISTRIBUTE",
+            10
+        ));
+
+        assertThatThrownBy(() -> service.start(new BacktestRunStartRequest(
+            "new-run",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            true,
+            true,
+            20,
+            LocalDate.parse("2020-01-02"),
+            LocalDate.parse("2020-01-02"),
+            "daily",
+            1,
+            1,
+            true
+        )))
+            .isInstanceOf(ApiException.class)
+            .satisfies(error -> assertThat(((ApiException) error).getCode()).isEqualTo(ErrorCode.BACKTEST_RUNNER_CONFLICT))
+            .hasMessageContaining("already-running");
     }
 }

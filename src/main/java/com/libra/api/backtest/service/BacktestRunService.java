@@ -41,7 +41,7 @@ public class BacktestRunService {
         this.properties = properties;
     }
 
-    public BacktestRunStatusResponse start(BacktestRunStartRequest request) {
+    public synchronized BacktestRunStatusResponse start(BacktestRunStartRequest request) {
         ensureRunnerConfigured();
         validateRequest(request);
 
@@ -74,8 +74,12 @@ public class BacktestRunService {
         if (!Files.isRegularFile(bundlesDir.resolve("index.json"))) {
             throw new ApiException(ErrorCode.BACKTEST_RUNNER_NOT_CONFIGURED, "ingest-bundles-article/index.json을 찾을 수 없습니다: " + bundlesDir);
         }
-        if (isRunAlive(outputDir.resolve(runId + ".pid.json")) && !force) {
-            throw new ApiException(ErrorCode.BACKTEST_RUNNER_CONFLICT, "이미 실행 중인 runId입니다: " + runId);
+        ActiveRun activeRun = findActiveRun(outputDir);
+        if (activeRun != null) {
+            throw new ApiException(
+                ErrorCode.BACKTEST_RUNNER_CONFLICT,
+                "이미 다른 백테스트가 실행 중입니다: " + activeRun.runId() + " (pid=" + activeRun.pid() + ")"
+            );
         }
 
         Path rawOut = outputDir.resolve("libra-replay-results." + runId + ".jsonl").normalize();
@@ -730,6 +734,32 @@ public class BacktestRunService {
         return isProcessRunning(longValue(readJson(pidPath), "pid"));
     }
 
+    private ActiveRun findActiveRun(Path outputDir) {
+        if (!Files.isDirectory(outputDir)) {
+            return null;
+        }
+        try (var stream = Files.list(outputDir)) {
+            for (Path pidPath : stream
+                .filter(path -> path.getFileName().toString().endsWith(".pid.json"))
+                .sorted()
+                .toList()) {
+                try {
+                    JsonNode pid = objectMapper.readTree(pidPath.toFile());
+                    long pidValue = longValue(pid, "pid");
+                    if (isProcessRunning(pidValue)) {
+                        String runId = text(pid, "run_id", pidPath.getFileName().toString().replaceFirst("\\.pid\\.json$", ""));
+                        return new ActiveRun(runId, pidValue, pidPath);
+                    }
+                } catch (IOException ignored) {
+                    // Ignore stale or partially written pid files when checking the global runner lock.
+                }
+            }
+            return null;
+        } catch (IOException e) {
+            throw new ApiException(ErrorCode.BACKTEST_RUNNER_FAILED, "백테스트 실행 상태를 확인할 수 없습니다: " + outputDir, e);
+        }
+    }
+
     private static boolean isProcessRunning(long pid) {
         return pid > 0 && ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false);
     }
@@ -853,6 +883,9 @@ public class BacktestRunService {
         long cacheCreationInputTokens,
         long cacheReadInputTokens
     ) {
+    }
+
+    private record ActiveRun(String runId, long pid, Path pidPath) {
     }
 
     private static void increment(Map<String, Integer> counts, String key) {

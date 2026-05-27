@@ -25,7 +25,7 @@ public enum ErrorCode {
     // Backtest runner
     BACKTEST_RUNNER_DISABLED(HttpStatus.SERVICE_UNAVAILABLE, "백테스트 실행 기능이 비활성화되어 있습니다"),
     BACKTEST_RUNNER_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE, "백테스트 실행 환경 설정이 필요합니다"),
-    BACKTEST_RUNNER_CONFLICT(HttpStatus.CONFLICT, "같은 백테스트 실행이 이미 진행 중입니다"),
+    BACKTEST_RUNNER_CONFLICT(HttpStatus.CONFLICT, "이미 백테스트 실행이 진행 중입니다"),
     BACKTEST_RUNNER_FAILED(HttpStatus.BAD_GATEWAY, "백테스트 실행 요청을 처리할 수 없습니다"),
 
     // Broker / market data
