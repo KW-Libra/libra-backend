@@ -3,3 +3,13 @@ logging:
     com.libra: DEBUG
     org.hibernate.SQL: DEBUG
     org.hibernate.orm.jdbc.bind: TRACE
+
+libra:
+  agent:
+    base-url: ${AGENT_BASE_URL:http://localhost:8000}
+  ingest:
+    workspace-root: ${LIBRA_INGEST_WORKSPACE_ROOT:D:/libra-ingest}
+    output-root: ${LIBRA_LIVE_INGEST_OUTPUT_ROOT:D:/Libra/outputs/live-ingest}
+    python-command: ${LIBRA_PYTHON_COMMAND:D:/libra-ingest/.venv/Scripts/python.exe}
+  kis:
+    credential-encryption-key: ${KIS_CREDENTIAL_ENCRYPTION_KEY:libra-local-dev-kis-credential-key-32-bytes}

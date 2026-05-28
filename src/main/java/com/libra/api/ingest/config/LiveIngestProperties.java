@@ -1,7 +1,9 @@
 package com.libra.api.ingest.config;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Locale;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "libra.ingest")
@@ -24,9 +26,7 @@ public record LiveIngestProperties(
         if (outputRoot == null) {
             outputRoot = Path.of("/opt/libra/backend/live-ingest");
         }
-        if (pythonCommand == null || pythonCommand.isBlank()) {
-            pythonCommand = "/opt/libra/ingest/.venv/bin/python";
-        }
+        pythonCommand = resolvePythonCommand(workspaceRoot, pythonCommand);
         if (rssLimit <= 0) {
             rssLimit = 20;
         }
@@ -45,5 +45,37 @@ public record LiveIngestProperties(
         if (timeout == null || timeout.isNegative() || timeout.isZero()) {
             timeout = Duration.ofMinutes(15);
         }
+    }
+
+    private static String resolvePythonCommand(Path workspaceRoot, String configured) {
+        Path workspaceVenv = workspaceRoot
+            .resolve(".venv")
+            .resolve(isWindows() ? "Scripts/python.exe" : "bin/python");
+        if (Files.isRegularFile(workspaceVenv) && shouldPreferWorkspaceVenv(configured)) {
+            return workspaceVenv.toString();
+        }
+        if (configured == null || configured.isBlank()) {
+            return isWindows() ? "python" : "/opt/libra/ingest/.venv/bin/python";
+        }
+        return configured;
+    }
+
+    private static boolean shouldPreferWorkspaceVenv(String configured) {
+        if (configured == null || configured.isBlank()) {
+            return true;
+        }
+        String normalized = configured.trim().replace('\\', '/').toLowerCase(Locale.ROOT);
+        if (normalized.equals("python") || normalized.equals("python.exe")) {
+            return true;
+        }
+        try {
+            return !Files.exists(Path.of(configured));
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    private static boolean isWindows() {
+        return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
     }
 }

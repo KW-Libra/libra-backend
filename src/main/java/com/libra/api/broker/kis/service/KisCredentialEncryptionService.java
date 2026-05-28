@@ -68,7 +68,7 @@ public class KisCredentialEncryptionService {
         } catch (ApiException e) {
             throw e;
         } catch (Exception e) {
-            throw new ApiException(ErrorCode.INTERNAL_ERROR, "Failed to decrypt KIS credential", e);
+            throw new ApiException(ErrorCode.KIS_CREDENTIAL_DECRYPTION_FAILED, "저장된 한국투자증권 API 키를 복호화할 수 없습니다. 다시 저장해 주세요", e);
         }
     }
 

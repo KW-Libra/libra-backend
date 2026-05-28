@@ -14,6 +14,8 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.io.IOException;
+import java.util.Map;
 import org.slf4j.MDC;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -44,7 +46,17 @@ public class RunController {
                                @Parameter(hidden = true) @AuthenticationPrincipal User user) {
         User principal = requireUser(user);
         String traceId = traceId();
-        return agent.startRun(ingest.prepare(req, principal, traceId), principal, traceId);
+        RunStartRequest prepared;
+        try {
+            prepared = ingest.prepare(req, principal, traceId);
+        } catch (ApiException e) {
+            return failedStream(req.thread_id(), traceId, "prepare", e);
+        }
+        try {
+            return agent.startRun(prepared, principal, traceId);
+        } catch (ApiException e) {
+            return failedStream(prepared.thread_id(), traceId, "open_agent", e);
+        }
     }
 
     @Operation(summary = "Resume a paused agent run and stream events")
@@ -65,5 +77,22 @@ public class RunController {
     private static String traceId() {
         String traceId = MDC.get(CorrelationIdFilter.MDC_KEY);
         return traceId == null || traceId.isBlank() ? "missing-trace-id" : traceId;
+    }
+
+    private static SseEmitter failedStream(String threadId, String traceId, String phase, ApiException error) {
+        SseEmitter emitter = new SseEmitter(10_000L);
+        try {
+            emitter.send(SseEmitter.event().name("run_failed").data(Map.of(
+                "thread_id", threadId == null || threadId.isBlank() ? traceId : threadId,
+                "code", error.getCode().name(),
+                "error", error.getMessage(),
+                "phase", phase,
+                "traceId", traceId
+            )));
+            emitter.complete();
+        } catch (IOException | IllegalStateException sendError) {
+            emitter.completeWithError(sendError);
+        }
+        return emitter;
     }
 }

@@ -13,7 +13,6 @@ public record KisCredentialUpsertRequest(
     @NotBlank
     @Pattern(regexp = "^[0-9]{8,12}$", message = "accountNumber must be 8-12 digits")
     String accountNumber,
-    @NotBlank
     @Pattern(regexp = "^[0-9]{2}$", message = "accountProductCode must be 2 digits")
     String accountProductCode,
     String htsId
@@ -29,7 +28,9 @@ public record KisCredentialUpsertRequest(
         if (accountNumber != null) {
             accountNumber = accountNumber.trim();
         }
-        if (accountProductCode != null) {
+        if (accountProductCode == null || accountProductCode.isBlank()) {
+            accountProductCode = "01";
+        } else {
             accountProductCode = accountProductCode.trim();
         }
         if (htsId != null) {

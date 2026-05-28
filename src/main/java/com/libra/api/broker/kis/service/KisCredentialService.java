@@ -32,7 +32,7 @@ public class KisCredentialService {
     @Transactional(readOnly = true)
     public KisCredentialStatusResponse status(User user) {
         return credentials.findByUserId(user.getId())
-            .map(this::statusFromCredential)
+            .map(this::safeStatusFromCredential)
             .orElseGet(this::serverOrNoneStatus);
     }
 
@@ -87,6 +87,17 @@ public class KisCredentialService {
             encryption.decrypt(credential.getAppKeyEncrypted()),
             encryption.decrypt(credential.getHtsIdEncrypted())
         );
+    }
+
+    private KisCredentialStatusResponse safeStatusFromCredential(KisCredential credential) {
+        try {
+            return statusFromCredential(credential);
+        } catch (ApiException e) {
+            if (e.getCode() == ErrorCode.KIS_CREDENTIAL_DECRYPTION_FAILED) {
+                return KisCredentialStatusResponse.invalid(credential);
+            }
+            throw e;
+        }
     }
 
     private KisCredentialStatusResponse serverOrNoneStatus() {

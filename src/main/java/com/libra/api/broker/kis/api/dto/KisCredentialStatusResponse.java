@@ -49,6 +49,22 @@ public record KisCredentialStatusResponse(
         );
     }
 
+    public static KisCredentialStatusResponse invalid(KisCredential credential) {
+        return new KisCredentialStatusResponse(
+            false,
+            "invalid",
+            false,
+            false,
+            credential.getEnvironment().name().toLowerCase(),
+            false,
+            false,
+            false,
+            null,
+            maskAccount(credential.getAccountNumber(), credential.getAccountProductCode()),
+            credential.getUpdatedAt()
+        );
+    }
+
     private static String mask(String value) {
         if (value == null || value.isBlank()) {
             return null;
