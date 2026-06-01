@@ -29,6 +29,7 @@ public class LiveIngestService {
 
     private static final int PRICE_HISTORY_LOOKBACK_TRADING_DAYS = 120;
     private static final int PRICE_HISTORY_QUERY_CALENDAR_DAYS = 220;
+    private static final long KIS_DAILY_CHART_REQUEST_DELAY_MS = 150L;
 
     private final LiveIngestProperties props;
     private final ObjectMapper objectMapper;
@@ -95,6 +96,7 @@ public class LiveIngestService {
         KisConnection connection = credentials.resolve(user);
         LocalDate endDate = LocalDate.now(ZoneId.of("Asia/Seoul"));
         LocalDate startDate = endDate.minusDays(PRICE_HISTORY_QUERY_CALENDAR_DAYS);
+        Double portfolioTotalValue = totalPortfolioValue(source);
         List<Map<String, Object>> enrichedHoldings = new ArrayList<>();
 
         for (Object item : holdings) {
@@ -107,17 +109,30 @@ public class LiveIngestService {
                 enrichedHoldings.add(holding);
                 continue;
             }
+            normalizeHoldingSchema(holding, ticker, portfolioTotalValue);
             List<Map<String, Object>> rowsForLiquidity;
             if (!hasUsableOhlcv(holding)) {
-                List<Map<String, Object>> ohlcv = marketClient.dailyOhlcv(
-                    ticker,
-                    firstNonBlank(holding, "market_code", "marketCode").isBlank()
-                        ? "J"
-                        : firstNonBlank(holding, "market_code", "marketCode"),
-                    startDate,
-                    endDate,
-                    connection
-                );
+                if (!isDomesticStockSymbol(ticker)) {
+                    throw new ApiException(
+                        ErrorCode.VALIDATION_FAILED,
+                        "KIS 일봉 조회는 6자리 국내 주식 코드만 지원합니다: " + ticker
+                    );
+                }
+                String marketCode = firstNonBlank(holding, "market_code", "marketCode");
+                if (marketCode.isBlank()) {
+                    marketCode = "J";
+                }
+                List<Map<String, Object>> ohlcv;
+                try {
+                    ohlcv = marketClient.dailyOhlcv(ticker, marketCode, startDate, endDate, connection);
+                    pauseBetweenDailyChartRequests();
+                } catch (ApiException e) {
+                    throw new ApiException(
+                        e.getCode(),
+                        "KIS 일봉 조회 실패: " + ticker + " (" + marketCode + ") - " + e.getMessage(),
+                        e
+                    );
+                }
                 if (ohlcv.isEmpty()) {
                     throw new ApiException(
                         ErrorCode.VALIDATION_FAILED,
@@ -137,6 +152,95 @@ public class LiveIngestService {
 
         enriched.put("holdings", enrichedHoldings);
         return enriched;
+    }
+
+    static boolean isDomesticStockSymbol(String ticker) {
+        return ticker != null && ticker.trim().matches("\\d{6}");
+    }
+
+    private static void normalizeHoldingSchema(Map<String, Object> holding, String ticker, Double portfolioTotalValue) {
+        holding.put("ticker", ticker);
+        if (!hasNonBlankValue(holding.get("symbol"))) {
+            holding.put("symbol", ticker);
+        }
+        putAliasIfMissing(holding, "company_name", "name", "symbol");
+        putAliasIfMissing(holding, "shares", "quantity");
+        putAliasIfMissing(holding, "last_price", "current_price", "currentPrice");
+        putAliasIfMissing(holding, "average_price", "averagePrice");
+        putAliasIfMissing(holding, "market_value_krw", "valuation_amount", "valuationAmount");
+        putAliasIfMissing(holding, "unrealized_pnl_krw", "profit_loss_amount", "profitLossAmount");
+        if (!holding.containsKey("aliases")) {
+            List<String> aliases = new ArrayList<>();
+            aliases.add(ticker);
+            String name = firstNonBlank(holding, "company_name", "name");
+            if (!name.isBlank() && !name.equals(ticker)) {
+                aliases.add(name);
+            }
+            holding.put("aliases", aliases);
+        }
+        if (!hasNumeric(holding, "weight") && portfolioTotalValue != null && portfolioTotalValue > 0) {
+            Double marketValue = toDouble(holding.get("market_value_krw"));
+            if (marketValue != null && marketValue > 0) {
+                holding.put("weight", Math.max(0.0, Math.min(1.0, marketValue / portfolioTotalValue)));
+            }
+        }
+    }
+
+    private static void putAliasIfMissing(Map<String, Object> holding, String targetKey, String... sourceKeys) {
+        if (hasNonBlankValue(holding.get(targetKey))) {
+            return;
+        }
+        for (String sourceKey : sourceKeys) {
+            Object value = holding.get(sourceKey);
+            if (hasNonBlankValue(value)) {
+                holding.put(targetKey, value);
+                return;
+            }
+        }
+    }
+
+    private static boolean hasNonBlankValue(Object value) {
+        return value != null && !value.toString().isBlank();
+    }
+
+    private static Double totalPortfolioValue(Map<String, Object> source) {
+        Double direct = firstDouble(source, "total_value_krw", "totalValueKrw", "totalValuationAmount", "netAssetAmount");
+        if (direct != null && direct > 0) {
+            return direct;
+        }
+        Object summary = source.get("summary");
+        if (summary instanceof Map<?, ?> summaryMap) {
+            Double fromSummary = firstDouble(
+                copyStringKeyMap(summaryMap),
+                "totalValuationAmount",
+                "netAssetAmount",
+                "valuationAmount",
+                "total_value_krw"
+            );
+            if (fromSummary != null && fromSummary > 0) {
+                return fromSummary;
+            }
+        }
+        return null;
+    }
+
+    private static Double firstDouble(Map<String, Object> source, String... keys) {
+        for (String key : keys) {
+            Double value = toDouble(source.get(key));
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private static void pauseBetweenDailyChartRequests() {
+        try {
+            Thread.sleep(KIS_DAILY_CHART_REQUEST_DELAY_MS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ApiException(ErrorCode.KIS_UNAVAILABLE, "KIS 일봉 조회 대기 중 인터럽트되었습니다", e);
+        }
     }
 
     private void runBuilder(

@@ -10,11 +10,13 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 
 @Component
 public class KisMarketClient {
@@ -24,6 +26,8 @@ public class KisMarketClient {
     private static final String INQUIRE_DAILY_ITEM_CHART_PATH = "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice";
     private static final String INQUIRE_DAILY_ITEM_CHART_TR_ID = "FHKST03010100";
     private static final DateTimeFormatter KIS_DATE_FORMAT = DateTimeFormatter.BASIC_ISO_DATE;
+    private static final int DAILY_CHART_MAX_ATTEMPTS = 3;
+    private static final long DAILY_CHART_RETRY_BASE_DELAY_MS = 300L;
 
     private final KisProperties properties;
     private final KisAuthClient authClient;
@@ -71,30 +75,83 @@ public class KisMarketClient {
     ) {
         ensureConfigured(connection);
         String normalizedMarketCode = normalizeMarketCode(marketCode);
-        try {
-            KisDailyChartEnvelope response = restClient(connection).get()
-                .uri(uriBuilder -> uriBuilder
-                    .path(INQUIRE_DAILY_ITEM_CHART_PATH)
-                    .queryParam("FID_COND_MRKT_DIV_CODE", normalizedMarketCode)
-                    .queryParam("FID_INPUT_ISCD", symbol)
-                    .queryParam("FID_INPUT_DATE_1", KIS_DATE_FORMAT.format(startDate))
-                    .queryParam("FID_INPUT_DATE_2", KIS_DATE_FORMAT.format(endDate))
-                    .queryParam("FID_PERIOD_DIV_CODE", "D")
-                    .queryParam("FID_ORG_ADJ_PRC", "1")
-                    .build())
-                .headers(headers -> applyKisHeaders(headers, authClient.accessToken(connection), INQUIRE_DAILY_ITEM_CHART_TR_ID, connection))
-                .retrieve()
-                .body(KisDailyChartEnvelope.class);
-            if (response == null || response.output2() == null) {
-                throw new ApiException(ErrorCode.KIS_UNAVAILABLE, "KIS daily chart response is empty");
+        for (int attempt = 1; attempt <= DAILY_CHART_MAX_ATTEMPTS; attempt++) {
+            try {
+                KisDailyChartEnvelope response = requestDailyChart(
+                    symbol,
+                    normalizedMarketCode,
+                    startDate,
+                    endDate,
+                    connection
+                );
+                if (response == null) {
+                    throw new ApiException(ErrorCode.KIS_UNAVAILABLE, dailyChartFailureMessage(
+                        symbol,
+                        normalizedMarketCode,
+                        "response is empty"
+                    ));
+                }
+                if (!"0".equals(response.rtCd())) {
+                    String detail = kisEnvelopeMessage(response.messageCode(), response.message());
+                    if (attempt < DAILY_CHART_MAX_ATTEMPTS && isRetryableKisMessage(response.messageCode(), response.message())) {
+                        sleepBeforeDailyChartRetry(attempt);
+                        continue;
+                    }
+                    throw new ApiException(ErrorCode.KIS_UNAVAILABLE, dailyChartFailureMessage(symbol, normalizedMarketCode, detail));
+                }
+                if (response.output2() == null) {
+                    throw new ApiException(ErrorCode.KIS_UNAVAILABLE, dailyChartFailureMessage(
+                        symbol,
+                        normalizedMarketCode,
+                        "output2 is empty"
+                    ));
+                }
+                return normalizeDailyChartRows(response.output2());
+            } catch (RestClientResponseException e) {
+                if (attempt < DAILY_CHART_MAX_ATTEMPTS && isRetryableHttpError(e)) {
+                    sleepBeforeDailyChartRetry(attempt);
+                    continue;
+                }
+                throw new ApiException(
+                    ErrorCode.KIS_UNAVAILABLE,
+                    dailyChartFailureMessage(symbol, normalizedMarketCode, summarizeKisError(e)),
+                    e
+                );
+            } catch (RestClientException e) {
+                if (attempt < DAILY_CHART_MAX_ATTEMPTS) {
+                    sleepBeforeDailyChartRetry(attempt);
+                    continue;
+                }
+                throw new ApiException(
+                    ErrorCode.KIS_UNAVAILABLE,
+                    dailyChartFailureMessage(symbol, normalizedMarketCode, e.getMessage()),
+                    e
+                );
             }
-            if (!"0".equals(response.rtCd())) {
-                throw new ApiException(ErrorCode.KIS_UNAVAILABLE, response.message());
-            }
-            return normalizeDailyChartRows(response.output2());
-        } catch (RestClientException e) {
-            throw new ApiException(ErrorCode.KIS_UNAVAILABLE, "KIS daily chart request failed");
         }
+        throw new ApiException(ErrorCode.KIS_UNAVAILABLE, dailyChartFailureMessage(symbol, normalizedMarketCode, "retry exhausted"));
+    }
+
+    private KisDailyChartEnvelope requestDailyChart(
+        String symbol,
+        String normalizedMarketCode,
+        LocalDate startDate,
+        LocalDate endDate,
+        KisConnection connection
+    ) {
+        return restClient(connection).get()
+            .uri(uriBuilder -> uriBuilder
+                .path(INQUIRE_DAILY_ITEM_CHART_PATH)
+                .queryParam("FID_COND_MRKT_DIV_CODE", normalizedMarketCode)
+                .queryParam("FID_INPUT_ISCD", symbol)
+                .queryParam("FID_INPUT_DATE_1", KIS_DATE_FORMAT.format(startDate))
+                .queryParam("FID_INPUT_DATE_2", KIS_DATE_FORMAT.format(endDate))
+                .queryParam("FID_PERIOD_DIV_CODE", "D")
+                .queryParam("FID_ORG_ADJ_PRC", "1")
+                .build())
+            .headers(headers -> applyKisHeaders(headers, authClient.accessToken(connection), INQUIRE_DAILY_ITEM_CHART_TR_ID, connection))
+            .retrieve()
+            .body(KisDailyChartEnvelope.class);
     }
 
     private static RestClient restClient(KisConnection connection) {
@@ -151,6 +208,73 @@ public class KisMarketClient {
 
     private static String decimalText(Map<String, Object> row, String key) {
         return stringValue(row, key).replace(",", "");
+    }
+
+    private static boolean isRetryableHttpError(RestClientResponseException e) {
+        int status = e.getStatusCode().value();
+        return status == 429 || status == 500 || status == 502 || status == 503 || status == 504;
+    }
+
+    private static boolean isRetryableKisMessage(String messageCode, String message) {
+        String text = ((messageCode == null ? "" : messageCode) + " " + (message == null ? "" : message))
+            .toLowerCase(Locale.ROOT);
+        return text.contains("egw")
+            || text.contains("rate")
+            || text.contains("limit")
+            || text.contains("timeout")
+            || text.contains("temporary")
+            || text.contains("초당")
+            || text.contains("제한")
+            || text.contains("과다");
+    }
+
+    private static void sleepBeforeDailyChartRetry(int attempt) {
+        try {
+            Thread.sleep(DAILY_CHART_RETRY_BASE_DELAY_MS * attempt);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ApiException(ErrorCode.KIS_UNAVAILABLE, "KIS daily chart retry interrupted", e);
+        }
+    }
+
+    private static String dailyChartFailureMessage(String symbol, String marketCode, String detail) {
+        String safeDetail = detail == null || detail.isBlank() ? "unknown error" : detail;
+        return "KIS daily chart request failed for " + symbol + " (" + marketCode + "): " + safeDetail;
+    }
+
+    private static String kisEnvelopeMessage(String messageCode, String message) {
+        String safeCode = messageCode == null ? "" : messageCode.trim();
+        String safeMessage = message == null ? "" : message.trim();
+        if (safeCode.isBlank()) {
+            return safeMessage.isBlank() ? "KIS returned failure without message" : safeMessage;
+        }
+        if (safeMessage.isBlank()) {
+            return "msg_cd=" + safeCode;
+        }
+        return "msg_cd=" + safeCode + " msg=" + safeMessage;
+    }
+
+    private static String summarizeKisError(RestClientResponseException e) {
+        String body = sanitizeKisErrorBody(e.getResponseBodyAsString());
+        String status = "HTTP " + e.getStatusCode().value();
+        if (body.isBlank()) {
+            return status;
+        }
+        return status + " body=" + body;
+    }
+
+    private static String sanitizeKisErrorBody(String body) {
+        if (body == null) {
+            return "";
+        }
+        String sanitized = body
+            .replaceAll("(?i)\"(access_token|appkey|appsecret|secretkey|approval_key)\"\\s*:\\s*\"[^\"]*\"", "\"$1\":\"***\"")
+            .replaceAll("\\s+", " ")
+            .trim();
+        if (sanitized.length() > 500) {
+            return sanitized.substring(0, 500) + "...";
+        }
+        return sanitized;
     }
 
     private record KisEnvelope(
