@@ -69,6 +69,12 @@ libra:
     base-url: ${AGENT_BASE_URL:http://localhost:8000}
     connect-timeout: ${AGENT_CONNECT_TIMEOUT:5s}
     stream-timeout: ${AGENT_STREAM_TIMEOUT:30m}
+  scheduler:
+    enabled: ${LIBRA_SCHEDULER_ENABLED:false}
+    daily-cron: ${LIBRA_SCHEDULER_DAILY_CRON:0 30 8 * * MON-FRI}
+    zone: ${LIBRA_SCHEDULER_ZONE:Asia/Seoul}
+    depth: ${LIBRA_SCHEDULER_DEPTH:medium}
+    approval-required: ${LIBRA_SCHEDULER_APPROVAL_REQUIRED:true}
   backtests:
     output-root: ${LIBRA_BACKTEST_OUTPUT_ROOT:/opt/libra/backtests}
     runner:

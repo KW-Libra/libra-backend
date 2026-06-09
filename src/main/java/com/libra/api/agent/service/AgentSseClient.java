@@ -48,6 +48,71 @@ public class AgentSseClient {
         return openAndRelay("/api/runs", body, user, traceId);
     }
 
+    /**
+     * SSE 를 소비할 클라이언트가 없는 호출 경로(스케줄러 등)용. agent 스트림을 열어 끝까지
+     * 소비하고 마지막 이벤트 요약을 반환한다.
+     */
+    public ScheduledRunOutcome runToCompletion(Object body, User user, String traceId) {
+        HttpResponse<InputStream> response = openAgentStream("/api/runs", body, user, traceId);
+        return drain(response.body(), traceId);
+    }
+
+    private ScheduledRunOutcome drain(InputStream stream, String traceId) {
+        int events = 0;
+        String lastEvent = null;
+        String lastData = null;
+        try (stream; BufferedReader reader = new BufferedReader(
+            new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+            String eventName = "message";
+            StringBuilder data = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.isBlank()) {
+                    if (data.length() > 0) {
+                        events++;
+                        lastEvent = eventName;
+                        lastData = data.toString();
+                        eventName = "message";
+                        data.setLength(0);
+                    }
+                    continue;
+                }
+                if (line.startsWith(":")) {
+                    continue;
+                }
+                if (line.startsWith("event:")) {
+                    eventName = line.substring("event:".length()).trim();
+                    continue;
+                }
+                if (line.startsWith("data:")) {
+                    if (data.length() > 0) {
+                        data.append('\n');
+                    }
+                    data.append(stripOneLeadingSpace(line.substring("data:".length())));
+                }
+            }
+            if (data.length() > 0) {
+                events++;
+                lastEvent = eventName;
+                lastData = data.toString();
+            }
+        } catch (IOException | IllegalStateException e) {
+            log.warn("agent run drain closed traceId={} message={}", traceId, e.getMessage());
+        }
+        return new ScheduledRunOutcome(events, lastEvent, snippet(lastData));
+    }
+
+    private static String snippet(String value) {
+        if (value == null) {
+            return null;
+        }
+        return value.length() > 200 ? value.substring(0, 200) + "..." : value;
+    }
+
+    /** SSE 미소비 run 의 결과 요약(이벤트 수와 마지막 이벤트). */
+    public record ScheduledRunOutcome(int eventCount, String lastEvent, String lastData) {
+    }
+
     public SseEmitter resumeRun(String threadId, Object body, User user, String traceId) {
         String path = "/api/runs/" + encodePathSegment(threadId) + "/resume";
         return openAndRelay(path, body, user, traceId);
