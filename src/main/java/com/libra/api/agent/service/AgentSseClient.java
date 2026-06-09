@@ -14,8 +14,15 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -46,6 +53,87 @@ public class AgentSseClient {
 
     public SseEmitter startRun(Object body, User user, String traceId) {
         return openAndRelay("/api/runs", body, user, traceId);
+    }
+
+    /**
+     * prepare(데이터 수집)를 SSE 스트림 안에서 비동기로 실행한다. emitter 를 즉시 열어
+     * {@code run_preparing} 이벤트와 주기적 keepalive 코멘트를 보내며(프록시 타임아웃 방지),
+     * 준비가 끝나면 agent 스트림을 그대로 중계한다. 준비 단계 실패는 {@code run_failed} 로 보낸다.
+     */
+    public SseEmitter startRunWithPreparation(Callable<Object> preparation, User user, String traceId) {
+        SseEmitter emitter = new SseEmitter(props.streamTimeout().toMillis());
+        relayExecutor.execute(() -> runWithPreparation(preparation, emitter, user, traceId));
+        return emitter;
+    }
+
+    private void runWithPreparation(Callable<Object> preparation, SseEmitter emitter, User user, String traceId) {
+        AtomicBoolean clientGone = new AtomicBoolean(false);
+        emitter.onTimeout(() -> clientGone.set(true));
+        emitter.onError(_error -> clientGone.set(true));
+        emitter.onCompletion(() -> clientGone.set(true));
+
+        Future<Object> task = relayExecutor.submit(preparation);
+        Object prepared;
+        try {
+            sendNamed(emitter, "run_preparing", objectMapper.writeValueAsString(Map.of(
+                "phase", "prepare",
+                "message", "시장 데이터·뉴스·공시 수집 중")));
+            while (true) {
+                if (clientGone.get()) {
+                    task.cancel(true);
+                    return;
+                }
+                try {
+                    prepared = task.get(15, TimeUnit.SECONDS);
+                    break;
+                } catch (TimeoutException te) {
+                    emitter.send(SseEmitter.event().comment("preparing"));
+                }
+            }
+        } catch (ExecutionException ee) {
+            task.cancel(true);
+            Throwable cause = ee.getCause();
+            ApiException api = (cause instanceof ApiException a)
+                ? a
+                : new ApiException(ErrorCode.INTERNAL_ERROR, "데이터 준비 중 오류가 발생했습니다", cause);
+            sendRunFailed(emitter, traceId, "prepare", api);
+            return;
+        } catch (InterruptedException ie) {
+            task.cancel(true);
+            Thread.currentThread().interrupt();
+            emitter.completeWithError(ie);
+            return;
+        } catch (IOException | IllegalStateException io) {
+            task.cancel(true);
+            log.warn("preparing stream closed traceId={} message={}", traceId, io.getMessage());
+            return;
+        }
+
+        try {
+            HttpResponse<InputStream> response = openAgentStream("/api/runs", prepared, user, traceId);
+            relay(response.body(), emitter, traceId);
+        } catch (ApiException api) {
+            sendRunFailed(emitter, traceId, "open_agent", api);
+        }
+    }
+
+    private void sendNamed(SseEmitter emitter, String name, String json) throws IOException {
+        emitter.send(SseEmitter.event().name(name).data(json));
+    }
+
+    private void sendRunFailed(SseEmitter emitter, String traceId, String phase, ApiException error) {
+        try {
+            String message = error.getMessage() == null ? error.getCode().name() : error.getMessage();
+            emitter.send(SseEmitter.event().name("run_failed").data(objectMapper.writeValueAsString(Map.of(
+                "thread_id", traceId,
+                "code", error.getCode().name(),
+                "error", message,
+                "phase", phase,
+                "traceId", traceId))));
+            emitter.complete();
+        } catch (IOException | IllegalStateException e) {
+            emitter.completeWithError(e);
+        }
     }
 
     /**
