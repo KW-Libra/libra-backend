@@ -15,6 +15,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -29,6 +30,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 @Service
@@ -38,12 +40,14 @@ public class AgentSseClient {
 
     private final AgentProperties props;
     private final ObjectMapper objectMapper;
+    private final AgentRunService agentRuns;
     private final HttpClient http;
     private final ExecutorService relayExecutor;
 
-    public AgentSseClient(AgentProperties props, ObjectMapper objectMapper) {
+    public AgentSseClient(AgentProperties props, ObjectMapper objectMapper, AgentRunService agentRuns) {
         this.props = props;
         this.objectMapper = objectMapper;
+        this.agentRuns = agentRuns;
         this.http = HttpClient.newBuilder()
             .connectTimeout(props.connectTimeout())
             .version(HttpClient.Version.HTTP_1_1)
@@ -52,21 +56,22 @@ public class AgentSseClient {
     }
 
     public SseEmitter startRun(Object body, User user, String traceId) {
-        return openAndRelay("/api/runs", body, user, traceId);
+        return openAndRelay("/api/runs", body, user, traceId, null);
     }
 
     /**
      * prepare(데이터 수집)를 SSE 스트림 안에서 비동기로 실행한다. emitter 를 즉시 열어
      * {@code run_preparing} 이벤트와 주기적 keepalive 코멘트를 보내며(프록시 타임아웃 방지),
      * 준비가 끝나면 agent 스트림을 그대로 중계한다. 준비 단계 실패는 {@code run_failed} 로 보낸다.
+     * runId 가 주어지면 중계하는 이벤트를 History 로 영속화한다.
      */
-    public SseEmitter startRunWithPreparation(Callable<Object> preparation, User user, String traceId) {
+    public SseEmitter startRunWithPreparation(Callable<Object> preparation, User user, String traceId, UUID runId) {
         SseEmitter emitter = new SseEmitter(props.streamTimeout().toMillis());
-        relayExecutor.execute(() -> runWithPreparation(preparation, emitter, user, traceId));
+        relayExecutor.execute(() -> runWithPreparation(preparation, emitter, user, traceId, runId));
         return emitter;
     }
 
-    private void runWithPreparation(Callable<Object> preparation, SseEmitter emitter, User user, String traceId) {
+    private void runWithPreparation(Callable<Object> preparation, SseEmitter emitter, User user, String traceId, UUID runId) {
         AtomicBoolean clientGone = new AtomicBoolean(false);
         emitter.onTimeout(() -> clientGone.set(true));
         emitter.onError(_error -> clientGone.set(true));
@@ -96,11 +101,13 @@ public class AgentSseClient {
             ApiException api = (cause instanceof ApiException a)
                 ? a
                 : new ApiException(ErrorCode.INTERNAL_ERROR, "데이터 준비 중 오류가 발생했습니다", cause);
+            failRunQuietly(runId, 0);
             sendRunFailed(emitter, traceId, "prepare", api);
             return;
         } catch (InterruptedException ie) {
             task.cancel(true);
             Thread.currentThread().interrupt();
+            failRunQuietly(runId, 0);
             emitter.completeWithError(ie);
             return;
         } catch (IOException | IllegalStateException io) {
@@ -111,8 +118,9 @@ public class AgentSseClient {
 
         try {
             HttpResponse<InputStream> response = openAgentStream("/api/runs", prepared, user, traceId);
-            relay(response.body(), emitter, traceId);
+            relay(response.body(), emitter, traceId, runId);
         } catch (ApiException api) {
+            failRunQuietly(runId, 0);
             sendRunFailed(emitter, traceId, "open_agent", api);
         }
     }
@@ -203,7 +211,8 @@ public class AgentSseClient {
 
     public SseEmitter resumeRun(String threadId, Object body, User user, String traceId) {
         String path = "/api/runs/" + encodePathSegment(threadId) + "/resume";
-        return openAndRelay(path, body, user, traceId);
+        UUID runId = findRunIdQuietly(user, threadId);
+        return openAndRelay(path, body, user, traceId, runId);
     }
 
     @PreDestroy
@@ -211,10 +220,10 @@ public class AgentSseClient {
         relayExecutor.shutdownNow();
     }
 
-    private SseEmitter openAndRelay(String path, Object body, User user, String traceId) {
+    private SseEmitter openAndRelay(String path, Object body, User user, String traceId, UUID runId) {
         HttpResponse<InputStream> response = openAgentStream(path, body, user, traceId);
         SseEmitter emitter = new SseEmitter(props.streamTimeout().toMillis());
-        relayExecutor.execute(() -> relay(response.body(), emitter, traceId));
+        relayExecutor.execute(() -> relay(response.body(), emitter, traceId, runId));
         return emitter;
     }
 
@@ -253,11 +262,14 @@ public class AgentSseClient {
         }
     }
 
-    private void relay(InputStream stream, SseEmitter emitter, String traceId) {
+    private void relay(InputStream stream, SseEmitter emitter, String traceId, UUID runId) {
         emitter.onTimeout(() -> closeQuietly(stream));
         emitter.onCompletion(() -> closeQuietly(stream));
         emitter.onError(_error -> closeQuietly(stream));
 
+        int index = 0;
+        String lastEvent = null;
+        String lastData = null;
         try (stream; BufferedReader reader = new BufferedReader(
             new InputStreamReader(stream, StandardCharsets.UTF_8))) {
             String eventName = "message";
@@ -266,7 +278,11 @@ public class AgentSseClient {
             while ((line = reader.readLine()) != null) {
                 if (line.isBlank()) {
                     if (data.length() > 0) {
-                        send(emitter, eventName, data.toString());
+                        String payload = data.toString();
+                        send(emitter, eventName, payload);
+                        persistEvent(runId, index++, eventName, payload);
+                        lastEvent = eventName;
+                        lastData = payload;
                         eventName = "message";
                         data.setLength(0);
                     }
@@ -287,15 +303,86 @@ public class AgentSseClient {
                 }
             }
             if (data.length() > 0) {
-                send(emitter, eventName, data.toString());
+                String payload = data.toString();
+                send(emitter, eventName, payload);
+                persistEvent(runId, index++, eventName, payload);
+                lastEvent = eventName;
+                lastData = payload;
             }
+            finalizeRun(runId, lastEvent, lastData, index);
             emitter.complete();
         } catch (IOException | IllegalStateException e) {
             log.warn("agent SSE relay closed traceId={} message={}", traceId, e.getMessage());
+            finalizeRun(runId, lastEvent, lastData, index);
             emitter.complete();
         } catch (Exception e) {
             log.error("agent SSE relay failed traceId={}", traceId, e);
+            finalizeRun(runId, lastEvent, lastData, index);
             emitter.completeWithError(e);
+        }
+    }
+
+    private void persistEvent(UUID runId, int index, String eventName, String payload) {
+        if (runId == null || eventName == null) {
+            return;
+        }
+        try {
+            agentRuns.recordEvent(runId, index, eventName, payload);
+            if ("run_started".equals(eventName)) {
+                String threadId = readField(payload, "thread_id");
+                if (threadId != null) {
+                    agentRuns.attachThread(runId, threadId);
+                }
+            }
+        } catch (RuntimeException e) {
+            log.warn("failed to persist run event runId={} type={} msg={}", runId, eventName, e.getMessage());
+        }
+    }
+
+    private void finalizeRun(UUID runId, String lastEvent, String lastData, int count) {
+        if (runId == null) {
+            return;
+        }
+        try {
+            if ("run_completed".equals(lastEvent)) {
+                agentRuns.completeRun(runId, readField(lastData, "decision"), readField(lastData, "branch"), null, count);
+            } else if ("run_failed".equals(lastEvent)) {
+                agentRuns.failRun(runId, count);
+            }
+            // interrupt_required / 비정상 종료 시 RUNNING 유지 — resume 으로 이어진다.
+        } catch (RuntimeException e) {
+            log.warn("failed to finalize run runId={} msg={}", runId, e.getMessage());
+        }
+    }
+
+    private void failRunQuietly(UUID runId, int count) {
+        if (runId == null) {
+            return;
+        }
+        try {
+            agentRuns.failRun(runId, count);
+        } catch (RuntimeException e) {
+            log.warn("failed to mark run failed runId={} msg={}", runId, e.getMessage());
+        }
+    }
+
+    private UUID findRunIdQuietly(User user, String threadId) {
+        try {
+            return agentRuns.findRunIdByThread(user.getId(), threadId);
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    private String readField(String json, String field) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            JsonNode node = objectMapper.readTree(json).get(field);
+            return node == null || node.isNull() ? null : node.asText();
+        } catch (RuntimeException e) {
+            return null;
         }
     }
 

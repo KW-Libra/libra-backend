@@ -21,11 +21,15 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.ObjectMapper;
 
 @Service
 public class LiveIngestService {
+
+    private static final Logger log = LoggerFactory.getLogger(LiveIngestService.class);
 
     private static final int PRICE_HISTORY_LOOKBACK_TRADING_DAYS = 120;
     private static final int PRICE_HISTORY_QUERY_CALENDAR_DAYS = 220;
@@ -75,8 +79,10 @@ public class LiveIngestService {
         try {
             Files.createDirectories(runDir);
             Files.writeString(portfolioPath, objectMapper.writeValueAsString(portfolio), StandardCharsets.UTF_8);
-            runBuilder(runDir, logPath);
-            Map<String, Object> bundle = buildBundle(runDir, user, safeTraceId);
+            boolean ingestOk = runBuilder(runDir, logPath);
+            Map<String, Object> bundle = ingestOk
+                ? buildBundle(runDir, user, safeTraceId)
+                : emptyBundle(user, safeTraceId);
             Files.writeString(bundlePath, objectMapper.writeValueAsString(bundle), StandardCharsets.UTF_8);
             return req.withPortfolioAndIngestBundle(portfolio, bundle);
         } catch (ApiException e) {
@@ -243,7 +249,7 @@ public class LiveIngestService {
         }
     }
 
-    private void runBuilder(
+    private boolean runBuilder(
         Path runDir,
         Path logPath
     ) throws IOException, InterruptedException {
@@ -277,23 +283,16 @@ public class LiveIngestService {
         boolean completed = process.waitFor(props.timeout().toMillis(), TimeUnit.MILLISECONDS);
         if (!completed) {
             process.destroyForcibly();
-            throw new ApiException(
-                ErrorCode.AGENT_TIMEOUT,
-                "실서비스 ingest bundle 생성이 제한 시간 안에 끝나지 않았습니다. log=" + logPath
-            );
+            log.warn("libra-ingest 시간 초과 — 보유 종목 가격 히스토리만으로 진행합니다. log={}", logPath);
+            return false;
         }
         if (process.exitValue() != 0) {
-            throw new ApiException(
-                ErrorCode.VALIDATION_FAILED,
-                "실서비스 ingest bundle 생성 실패. log tail=" + tail(logPath, 3000)
-            );
+            log.warn("libra-ingest 종료 코드 {} — 보유 종목 가격 히스토리만으로 진행합니다. log tail={}",
+                process.exitValue(), tail(logPath, 1000));
+            return false;
         }
-        if (!Files.isRegularFile(runDir.resolve("events.json"))) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED, "libra-ingest events.json이 생성되지 않았습니다: " + runDir);
-        }
-        if (!Files.isRegularFile(runDir.resolve("normalized_documents.json"))) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED, "libra-ingest normalized_documents.json이 생성되지 않았습니다: " + runDir);
-        }
+        return Files.isRegularFile(runDir.resolve("events.json"))
+            && Files.isRegularFile(runDir.resolve("normalized_documents.json"));
     }
 
     private Map<String, Object> buildBundle(Path runDir, User user, String traceId) throws IOException {
@@ -309,9 +308,6 @@ public class LiveIngestService {
         );
         List<?> events = eventsPayload.get("events") instanceof List<?> list ? list : List.of();
         List<?> documents = documentsPayload.get("documents") instanceof List<?> list ? list : List.of();
-        if (events.isEmpty() && documents.isEmpty()) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED, "libra-ingest가 사용 가능한 문서/이벤트를 생성하지 못했습니다");
-        }
         String asOf = OffsetDateTime.now(ZoneId.of("Asia/Seoul")).toString();
         Map<String, Object> bundle = new LinkedHashMap<>();
         bundle.put("bundle_id", "service-run-" + traceId);
@@ -321,10 +317,26 @@ public class LiveIngestService {
         bundle.put("prices_until", LocalDate.now(ZoneId.of("Asia/Seoul")).toString());
         bundle.put("observed_count", events.size());
         bundle.put("portfolio_relevant_count", events.size());
-        bundle.put("usable_for_trade_decision", true);
+        bundle.put("usable_for_trade_decision", !events.isEmpty());
         bundle.put("items", events);
         bundle.put("document_count", documents.size());
         bundle.put("documents", documents);
+        return bundle;
+    }
+
+    private Map<String, Object> emptyBundle(User user, String traceId) {
+        Map<String, Object> bundle = new LinkedHashMap<>();
+        bundle.put("bundle_id", "service-run-" + traceId);
+        bundle.put("as_of", OffsetDateTime.now(ZoneId.of("Asia/Seoul")).toString());
+        bundle.put("portfolio_id", user.getId().toString());
+        bundle.put("source_policy", "libra-ingest 결과 없음 — 보유 종목 가격 히스토리만으로 진행");
+        bundle.put("prices_until", LocalDate.now(ZoneId.of("Asia/Seoul")).toString());
+        bundle.put("observed_count", 0);
+        bundle.put("portfolio_relevant_count", 0);
+        bundle.put("usable_for_trade_decision", false);
+        bundle.put("items", List.of());
+        bundle.put("document_count", 0);
+        bundle.put("documents", List.of());
         return bundle;
     }
 

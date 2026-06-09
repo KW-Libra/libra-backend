@@ -101,7 +101,7 @@ libra:
     report-limit: ${LIBRA_LIVE_INGEST_REPORT_LIMIT:2}
     report-pdf-pages: ${LIBRA_LIVE_INGEST_REPORT_PDF_PAGES:5}
     report-min-body-chars: ${LIBRA_LIVE_INGEST_REPORT_MIN_BODY_CHARS:500}
-    timeout: ${LIBRA_LIVE_INGEST_TIMEOUT:4m}
+    timeout: ${LIBRA_LIVE_INGEST_TIMEOUT:2m}
   kis:
     enabled: ${KIS_ENABLED:false}
     trading-enabled: ${KIS_TRADING_ENABLED:false}

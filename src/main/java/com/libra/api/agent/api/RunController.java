@@ -2,6 +2,7 @@ package com.libra.api.agent.api;
 
 import com.libra.api.agent.api.dto.ResumeRequest;
 import com.libra.api.agent.api.dto.RunStartRequest;
+import com.libra.api.agent.service.AgentRunService;
 import com.libra.api.agent.service.AgentSseClient;
 import com.libra.api.auth.domain.User;
 import com.libra.api.common.correlation.CorrelationIdFilter;
@@ -9,6 +10,7 @@ import com.libra.api.common.error.ApiException;
 import com.libra.api.common.error.ErrorCode;
 import com.libra.api.config.OpenApiConfig;
 import com.libra.api.ingest.service.LiveIngestService;
+import java.util.UUID;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -32,10 +34,12 @@ public class RunController {
 
     private final AgentSseClient agent;
     private final LiveIngestService ingest;
+    private final AgentRunService agentRuns;
 
-    public RunController(AgentSseClient agent, LiveIngestService ingest) {
+    public RunController(AgentSseClient agent, LiveIngestService ingest, AgentRunService agentRuns) {
         this.agent = agent;
         this.ingest = ingest;
+        this.agentRuns = agentRuns;
     }
 
     @Operation(summary = "Start an agent run and stream events")
@@ -46,9 +50,10 @@ public class RunController {
         String traceId = traceId();
         // prepare(데이터 수집)는 수 분이 걸릴 수 있어 SSE 스트림 안에서 비동기로 실행한다.
         // 동기 호출 시 첫 이벤트까지 응답이 시작되지 않아 화면이 멈춘 것처럼 보였다.
+        UUID runId = agentRuns.createRun(principal.getId(), traceId, req.query(), req.trigger());
         return agent.startRunWithPreparation(
             () -> ingest.prepare(req, principal, traceId),
-            principal, traceId);
+            principal, traceId, runId);
     }
 
     @Operation(summary = "Resume a paused agent run and stream events")
