@@ -15,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 
 @Component
 public class KisAccountClient {
@@ -67,8 +68,10 @@ public class KisAccountClient {
                 trCont = "N";
             }
             return KisBalanceResponse.from(environment, holdings, summary, hasNext, nextFk, nextNk);
+        } catch (RestClientResponseException e) {
+            throw new ApiException(ErrorCode.KIS_UNAVAILABLE, "KIS balance request failed: " + summarizeKisError(e), e);
         } catch (RestClientException e) {
-            throw new ApiException(ErrorCode.KIS_UNAVAILABLE, "KIS balance request failed");
+            throw new ApiException(ErrorCode.KIS_UNAVAILABLE, "KIS balance request failed", e);
         }
     }
 
@@ -113,8 +116,10 @@ public class KisAccountClient {
                 normalizedOrderDivision,
                 response.output()
             );
+        } catch (RestClientResponseException e) {
+            throw new ApiException(ErrorCode.KIS_UNAVAILABLE, "KIS buyable cash request failed: " + summarizeKisError(e), e);
         } catch (RestClientException e) {
-            throw new ApiException(ErrorCode.KIS_UNAVAILABLE, "KIS buyable cash request failed");
+            throw new ApiException(ErrorCode.KIS_UNAVAILABLE, "KIS buyable cash request failed", e);
         }
     }
 
@@ -186,6 +191,23 @@ public class KisAccountClient {
             return "01";
         }
         return orderDivision.trim();
+    }
+
+    private static String summarizeKisError(RestClientResponseException e) {
+        String body = sanitizeKisErrorBody(e.getResponseBodyAsString());
+        String status = "HTTP " + e.getStatusCode().value();
+        return body.isBlank() ? status : status + " body=" + body;
+    }
+
+    private static String sanitizeKisErrorBody(String body) {
+        if (body == null) {
+            return "";
+        }
+        String sanitized = body
+            .replaceAll("(?i)\"(access_token|appkey|appsecret|secretkey|approval_key)\"\\s*:\\s*\"[^\"]*\"", "\"$1\":\"***\"")
+            .replaceAll("\\s+", " ")
+            .trim();
+        return sanitized.length() > 500 ? sanitized.substring(0, 500) + "..." : sanitized;
     }
 
     private record KisBalanceEnvelope(
