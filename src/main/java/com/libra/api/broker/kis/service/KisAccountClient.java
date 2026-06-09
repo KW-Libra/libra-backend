@@ -38,6 +38,27 @@ public class KisAccountClient {
 
     public KisBalanceResponse balance(KisConnection connection) {
         ensureConfigured(connection);
+        RestClientResponseException lastRateLimit = null;
+        for (int attempt = 0; attempt < 3; attempt++) {
+            try {
+                return balanceOnce(connection);
+            } catch (RestClientResponseException e) {
+                if (isRateLimited(e) && attempt < 2) {
+                    lastRateLimit = e;
+                    sleepQuietly(700L);
+                    continue;
+                }
+                throw new ApiException(ErrorCode.KIS_UNAVAILABLE, "KIS balance request failed: " + summarizeKisError(e), e);
+            } catch (RestClientException e) {
+                throw new ApiException(ErrorCode.KIS_UNAVAILABLE, "KIS balance request failed", e);
+            }
+        }
+        // 모든 재시도가 rate limit 으로 실패
+        throw new ApiException(ErrorCode.KIS_UNAVAILABLE,
+            "KIS balance request failed: " + summarizeKisError(lastRateLimit), lastRateLimit);
+    }
+
+    private KisBalanceResponse balanceOnce(KisConnection connection) {
         String environment = connection.environmentName();
         String nextFk = "";
         String nextNk = "";
@@ -45,34 +66,27 @@ public class KisAccountClient {
         boolean hasNext = false;
         Map<String, Object> summary = Map.of();
         List<Map<String, Object>> holdings = new ArrayList<>();
-
-        try {
-            for (int page = 0; page < MAX_BALANCE_PAGES; page++) {
-                ResponseEntity<KisBalanceEnvelope> responseEntity = requestBalancePage(connection, nextFk, nextNk, trCont);
-                KisBalanceEnvelope response = responseEntity.getBody();
-                if (response == null) {
-                    throw new ApiException(ErrorCode.KIS_UNAVAILABLE, "KIS balance response is empty");
-                }
-                if (!"0".equals(response.rtCd())) {
-                    throw new ApiException(ErrorCode.KIS_UNAVAILABLE, response.message());
-                }
-                holdings.addAll(response.output1OrEmpty());
-                summary = response.firstSummary();
-                nextFk = response.contextFk();
-                nextNk = response.contextNk();
-                trCont = responseEntity.getHeaders().getFirst("tr_cont");
-                hasNext = "M".equalsIgnoreCase(trCont) || "F".equalsIgnoreCase(trCont);
-                if (!hasNext) {
-                    break;
-                }
-                trCont = "N";
+        for (int page = 0; page < MAX_BALANCE_PAGES; page++) {
+            ResponseEntity<KisBalanceEnvelope> responseEntity = requestBalancePage(connection, nextFk, nextNk, trCont);
+            KisBalanceEnvelope response = responseEntity.getBody();
+            if (response == null) {
+                throw new ApiException(ErrorCode.KIS_UNAVAILABLE, "KIS balance response is empty");
             }
-            return KisBalanceResponse.from(environment, holdings, summary, hasNext, nextFk, nextNk);
-        } catch (RestClientResponseException e) {
-            throw new ApiException(ErrorCode.KIS_UNAVAILABLE, "KIS balance request failed: " + summarizeKisError(e), e);
-        } catch (RestClientException e) {
-            throw new ApiException(ErrorCode.KIS_UNAVAILABLE, "KIS balance request failed", e);
+            if (!"0".equals(response.rtCd())) {
+                throw new ApiException(ErrorCode.KIS_UNAVAILABLE, response.message());
+            }
+            holdings.addAll(response.output1OrEmpty());
+            summary = response.firstSummary();
+            nextFk = response.contextFk();
+            nextNk = response.contextNk();
+            trCont = responseEntity.getHeaders().getFirst("tr_cont");
+            hasNext = "M".equalsIgnoreCase(trCont) || "F".equalsIgnoreCase(trCont);
+            if (!hasNext) {
+                break;
+            }
+            trCont = "N";
         }
+        return KisBalanceResponse.from(environment, holdings, summary, hasNext, nextFk, nextNk);
     }
 
     public KisBuyableCashResponse buyableCash(String symbol, BigDecimal price, String orderDivision) {
@@ -191,6 +205,19 @@ public class KisAccountClient {
             return "01";
         }
         return orderDivision.trim();
+    }
+
+    private static boolean isRateLimited(RestClientResponseException e) {
+        String body = e.getResponseBodyAsString();
+        return body != null && (body.contains("EGW00201") || body.contains("초당"));
+    }
+
+    private static void sleepQuietly(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private static String summarizeKisError(RestClientResponseException e) {
