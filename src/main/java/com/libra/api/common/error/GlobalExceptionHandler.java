@@ -10,9 +10,11 @@ import org.slf4j.MDC;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * RFC 7807 ProblemDetail 로 통일된 에러 응답.
@@ -54,6 +56,23 @@ public class GlobalExceptionHandler {
                  MDC.get("traceId"), req.getRequestURI(), detail);
         return ResponseEntity.badRequest()
             .body(problem(400, ErrorCode.VALIDATION_FAILED.name(), detail, req));
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ProblemDetail> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex,
+                                                                  HttpServletRequest req) {
+        log.warn("Method not supported traceId={} path={} method={}",
+                 MDC.get("traceId"), req.getRequestURI(), req.getMethod());
+        return ResponseEntity.status(405)
+            .body(problem(405, "METHOD_NOT_ALLOWED", ex.getMessage(), req));
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ProblemDetail> handleNoResource(NoResourceFoundException ex,
+                                                          HttpServletRequest req) {
+        log.warn("No resource traceId={} path={}", MDC.get("traceId"), req.getRequestURI());
+        return ResponseEntity.status(404)
+            .body(problem(404, ErrorCode.RESOURCE_NOT_FOUND.name(), "요청한 경로를 찾을 수 없습니다", req));
     }
 
     @ExceptionHandler(Exception.class)
